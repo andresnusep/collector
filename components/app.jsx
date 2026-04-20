@@ -67,13 +67,14 @@ function CollectorStudio({ tweaks, setTweaks }) {
     if (activeSetId && savedSets.some(s => s.id === activeSetId)) {
       setSavedSets(ss => ss.map(s => s.id === activeSetId
         ? { ...s, name: finalName, trackIds: [...set] } : s));
-      setCurrentSetName(finalName);
-      return;
+    } else {
+      const id = `s${Date.now()}`;
+      setSavedSets(ss => [...ss, { id, name: finalName, trackIds: [...set], createdAt: Date.now() }]);
     }
-    const id = `s${Date.now()}`;
-    setSavedSets(ss => [...ss, { id, name: finalName, trackIds: [...set], createdAt: Date.now() }]);
-    setActiveSetId(id);
-    setCurrentSetName(finalName);
+    // Reset the builder for a fresh new set
+    setSet([]);
+    setActiveSetId(null);
+    setCurrentSetName('');
   };
   const openSavedSet = (id) => {
     setViewingSetId(id);
