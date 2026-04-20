@@ -7,8 +7,10 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
   const [nowIdx, setNowIdx] = React.useState(0);
   const [openCrateId, setOpenCrateId] = React.useState(null);
   const [libSearch, setLibSearch] = React.useState('');
-  // null = current builder set; otherwise a saved set id
+  // Now tab set selection: null = builder, else saved set id
   const [selectedSetId, setSelectedSetId] = React.useState(null);
+  // Set tab sub-page: 'hub' (list), 'builder', or a saved set id (detail)
+  const [setPage, setSetPage] = React.useState('hub');
 
   const activeSet = selectedSetId
     ? (savedSets || []).find(s => s.id === selectedSetId)
@@ -53,14 +55,29 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
           setSelectedSetId={setSelectedSetId} activeSetLabel={activeSetLabel}
           accent={accent} fg={fg} bg={bg} soft={soft} border={border} />
       )}
-      {tab === 'set' && (
-        <MobileSet queue={resolved}
-          savedSets={savedSets || []} selectedSetId={selectedSetId}
-          setSelectedSetId={setSelectedSetId} activeSetLabel={activeSetLabel}
-          isBuilder={selectedSetId === null}
+      {tab === 'set' && setPage === 'hub' && (
+        <MobileSetsHub savedSets={savedSets || []} records={records}
+          builderCount={(set || []).length} currentSetName={currentSetName}
+          onOpenBuilder={() => setSetPage('builder')}
+          onOpenSet={(id) => setSetPage(id)}
+          accent={accent} fg={fg} soft={soft} border={border} />
+      )}
+      {tab === 'set' && setPage === 'builder' && (
+        <MobileSetBuilder queue={(set || []).map(tid => {
+          const p = window.parseTrackId ? window.parseTrackId(tid) : null;
+          return p ? { tid, ...p } : null;
+        }).filter(Boolean)}
           currentSetName={currentSetName} setCurrentSetName={setCurrentSetName}
+          onBack={() => setSetPage('hub')}
           onSaveSet={onSaveSet} onRemoveFromSet={onRemoveFromSet} onClearSet={onClearSet}
-          onLoadSavedSet={onLoadSavedSet} onGoBuild={() => { setSelectedSetId(null); setTab('lib'); }}
+          onGoBrowse={() => setTab('lib')}
+          accent={accent} fg={fg} soft={soft} border={border} />
+      )}
+      {tab === 'set' && setPage !== 'hub' && setPage !== 'builder' && (
+        <MobileSetDetail savedSet={(savedSets || []).find(s => s.id === setPage)}
+          records={records}
+          onBack={() => setSetPage('hub')}
+          onLoadSavedSet={(id) => { onLoadSavedSet(id); setSetPage('builder'); }}
           accent={accent} fg={fg} soft={soft} border={border} />
       )}
       {tab === 'crates' && (
@@ -84,10 +101,13 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
         {[
           { id: 'lib', label: 'Library', icon: Icon.Dig },
           { id: 'crates', label: 'Crates', icon: Icon.Heart },
-          { id: 'set', label: 'Set', icon: Icon.Deck },
+          { id: 'set', label: 'Sets', icon: Icon.Deck },
           { id: 'now', label: 'Now', icon: Icon.Disc },
         ].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{
+          <button key={t.id} onClick={() => {
+            if (t.id === 'set') setSetPage('hub');
+            setTab(t.id);
+          }} style={{
             flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
             padding: '6px 0', background: 'transparent', border: 'none',
             color: tab === t.id ? accent : (darkMode ? 'rgba(244,239,230,0.5)' : 'rgba(14,12,10,0.5)'),
@@ -306,12 +326,148 @@ function BigStat({ label, value, accent, small }) {
   );
 }
 
-// ─────────── Set (read the current builder set) ───────────
+// ─────────── Set screens: hub → builder/detail ───────────
 
-function MobileSet({ queue, savedSets, selectedSetId, setSelectedSetId, activeSetLabel,
-                     isBuilder, currentSetName, setCurrentSetName,
-                     onSaveSet, onRemoveFromSet, onClearSet, onLoadSavedSet, onGoBuild,
-                     accent, fg, soft, border }) {
+function SetTrackRow({ item, i, accent, soft, fg, border, onRemove }) {
+  const r = item.record, t = item.track;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: 10,
+      borderRadius: 8, background: soft,
+    }}>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700,
+        color: accent, width: 22, textAlign: 'center',
+      }}>{String(i + 1).padStart(2, '0')}</div>
+      <RecordCover hue={r.cover.hue} shape={r.cover.shape} imageUrl={r.cover.image}
+        title={r.title} artist={r.artist} size={42}
+        style={{ width: 42, height: 42, borderRadius: 3, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 12, fontWeight: 600,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</div>
+        <div style={{ fontSize: 10, opacity: 0.6,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.artist}</div>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 12, fontWeight: 700 }}>{t.bpm ?? '—'}</div>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace',
+          fontSize: 9, opacity: 0.6 }}>{t.key ?? '—'}</div>
+      </div>
+      {onRemove && (
+        <button onClick={onRemove} title="Remove from set" style={{
+          width: 24, height: 24, borderRadius: 12,
+          border: `1px solid ${border}`, background: 'transparent',
+          color: fg, cursor: 'pointer', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, lineHeight: 1,
+        }}>×</button>
+      )}
+    </div>
+  );
+}
+
+function BackHeader({ onBack, title, fg, border }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '4px 0 14px',
+    }}>
+      <button onClick={onBack} style={{
+        width: 30, height: 30, borderRadius: 15,
+        border: `1px solid ${border}`, background: 'transparent',
+        color: fg, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 16, lineHeight: 1, flexShrink: 0, padding: 0,
+      }}>‹</button>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.2,
+        textTransform: 'uppercase', opacity: 0.55,
+      }}>{title}</div>
+    </div>
+  );
+}
+
+function MobileSetsHub({ savedSets, records, builderCount, currentSetName,
+                         onOpenBuilder, onOpenSet, accent, fg, soft, border }) {
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 20px' }}>
+      <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, marginBottom: 4 }}>Sets</div>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1,
+        textTransform: 'uppercase', opacity: 0.55, marginBottom: 14,
+      }}>{savedSets.length} saved</div>
+
+      <button onClick={onOpenBuilder} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+        padding: 12, borderRadius: 10, marginBottom: 10,
+        background: 'transparent', border: `1.5px dashed ${accent}`,
+        color: fg, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+      }}>
+        <div style={{
+          width: 42, height: 42, borderRadius: 6, background: accent,
+          color: '#0E0C0A', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontSize: 20, fontWeight: 700, flexShrink: 0,
+        }}>+</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Builder</div>
+          <div style={{ fontSize: 11, opacity: 0.6 }}>
+            {builderCount > 0
+              ? `${currentSetName || 'Unsaved set'} · ${builderCount} track${builderCount === 1 ? '' : 's'}`
+              : 'Start a new set'}
+          </div>
+        </div>
+        <span style={{ opacity: 0.5, fontSize: 14 }}>›</span>
+      </button>
+
+      {savedSets.length === 0 ? (
+        <div style={{
+          padding: 30, textAlign: 'center', borderRadius: 10,
+          border: `1px dashed ${border}`, opacity: 0.7, fontSize: 12, marginTop: 8,
+        }}>No saved sets yet. Build one and hit Save.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {savedSets.map(s => {
+            const firstRec = s.trackIds.length > 0
+              ? records.find(r => r.id === s.trackIds[0].split('-')[0])
+              : null;
+            const gigCount = Array.isArray(s.gigs) ? s.gigs.length : (s.gig ? 1 : 0);
+            return (
+              <button key={s.id} onClick={() => onOpenSet(s.id)} style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: 10, borderRadius: 10, background: soft, border: 'none',
+                color: fg, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+              }}>
+                {firstRec ? (
+                  <RecordCover hue={firstRec.cover.hue} shape={firstRec.cover.shape}
+                    imageUrl={firstRec.cover.image}
+                    title={firstRec.title} artist={firstRec.artist} size={42}
+                    style={{ width: 42, height: 42, borderRadius: 4, flexShrink: 0 }} />
+                ) : (
+                  <div style={{ width: 42, height: 42, borderRadius: 4,
+                    background: border, flexShrink: 0 }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</div>
+                  <div style={{ fontSize: 10, opacity: 0.6,
+                    fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.5 }}>
+                    {s.trackIds.length} tracks{gigCount > 0 ? ` · ${gigCount} gig${gigCount === 1 ? '' : 's'}` : ''}
+                  </div>
+                </div>
+                <span style={{ opacity: 0.4, fontSize: 14 }}>›</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileSetBuilder({ queue, currentSetName, setCurrentSetName, onBack,
+                             onSaveSet, onRemoveFromSet, onClearSet, onGoBrowse,
+                             accent, fg, soft, border }) {
   const totalMin = queue.reduce((sum, item) => {
     const [m, s] = (item.track.len || '0:0').split(':').map(Number);
     return sum + m + s / 60;
@@ -321,22 +477,18 @@ function MobileSet({ queue, savedSets, selectedSetId, setSelectedSetId, activeSe
     if (name && name.trim()) onSaveSet(name.trim());
   };
   return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px' }}>
-      <SetPicker savedSets={savedSets} selectedSetId={selectedSetId}
-        setSelectedSetId={setSelectedSetId} activeSetLabel={activeSetLabel}
-        fg={fg} soft={soft} border={border} accent={accent} />
+    <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 20px' }}>
+      <BackHeader onBack={onBack} title="Sets · Builder" fg={fg} border={border} />
 
-      {isBuilder && (
-        <input value={currentSetName || ''}
-          onChange={e => setCurrentSetName(e.target.value)}
-          placeholder="Name this set…"
-          style={{
-            width: '100%', padding: '8px 10px', borderRadius: 8,
-            background: 'transparent', border: `1px solid ${border}`,
-            color: fg, fontSize: 13, fontFamily: 'inherit', outline: 'none',
-            marginBottom: 10,
-          }} />
-      )}
+      <input value={currentSetName || ''}
+        onChange={e => setCurrentSetName(e.target.value)}
+        placeholder="Name this set…"
+        style={{
+          width: '100%', padding: '8px 10px', borderRadius: 8,
+          background: 'transparent', border: `1px solid ${border}`,
+          color: fg, fontSize: 13, fontFamily: 'inherit', outline: 'none',
+          marginBottom: 10,
+        }} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between',
         alignItems: 'baseline', marginBottom: 4 }}>
@@ -350,32 +502,117 @@ function MobileSet({ queue, savedSets, selectedSetId, setSelectedSetId, activeSe
         textTransform: 'uppercase', opacity: 0.55, marginBottom: 14,
       }}>{queue.length} tracks</div>
 
-      {isBuilder ? (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          <button onClick={save} disabled={queue.length === 0} style={{
-            flex: 1, padding: '10px', borderRadius: 8,
-            background: accent, color: '#0E0C0A', border: 'none',
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <button onClick={save} disabled={queue.length === 0} style={{
+          flex: 1, padding: '10px', borderRadius: 8,
+          background: accent, color: '#0E0C0A', border: 'none',
+          fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+          fontFamily: 'inherit', cursor: queue.length === 0 ? 'default' : 'pointer',
+          opacity: queue.length === 0 ? 0.4 : 1,
+        }}>Save set</button>
+        <button onClick={() => { if (queue.length && confirm('Clear the builder set?')) onClearSet(); }}
+          style={{
+            padding: '10px 14px', borderRadius: 8,
+            background: 'transparent', color: fg, border: `1px solid ${border}`,
             fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
-            fontFamily: 'inherit', cursor: queue.length === 0 ? 'default' : 'pointer',
-            opacity: queue.length === 0 ? 0.4 : 1,
-          }}>Save set</button>
-          <button onClick={() => { if (queue.length && confirm('Clear the builder set?')) onClearSet(); }}
-            style={{
-              padding: '10px 14px', borderRadius: 8,
-              background: 'transparent', color: fg, border: `1px solid ${border}`,
-              fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
-              fontFamily: 'inherit', cursor: 'pointer',
-            }}>Clear</button>
+            fontFamily: 'inherit', cursor: 'pointer',
+          }}>Clear</button>
+      </div>
+
+      {queue.length === 0 ? (
+        <div style={{
+          padding: 30, textAlign: 'center', borderRadius: 10,
+          border: `1px dashed ${border}`, opacity: 0.7, fontSize: 12,
+        }}>
+          <div style={{ marginBottom: 12 }}>
+            Your set is empty. Add tracks from the Library or a Crate.
+          </div>
+          <button onClick={onGoBrowse} style={{
+            padding: '8px 14px', borderRadius: 6, border: 'none',
+            background: accent, color: '#0E0C0A',
+            fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+            fontFamily: 'inherit', cursor: 'pointer',
+          }}>Browse library</button>
         </div>
       ) : (
-        <div style={{ marginBottom: 12 }}>
-          <button onClick={() => { if (confirm('Load this set into the builder?')) onLoadSavedSet(selectedSetId); }}
-            style={{
-              width: '100%', padding: '10px', borderRadius: 8,
-              background: accent, color: '#0E0C0A', border: 'none',
-              fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
-              fontFamily: 'inherit', cursor: 'pointer',
-            }}>Load into builder to edit</button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {queue.map((item, i) => (
+            <SetTrackRow key={item.tid} item={item} i={i}
+              accent={accent} soft={soft} fg={fg} border={border}
+              onRemove={() => onRemoveFromSet(item.tid)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileSetDetail({ savedSet, records, onBack, onLoadSavedSet,
+                            accent, fg, soft, border }) {
+  if (!savedSet) {
+    return (
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 20px' }}>
+        <BackHeader onBack={onBack} title="Sets" fg={fg} border={border} />
+        <div style={{ padding: 20, opacity: 0.6, fontSize: 12 }}>Set not found.</div>
+      </div>
+    );
+  }
+  const queue = (savedSet.trackIds || []).map(tid => {
+    const p = window.parseTrackId ? window.parseTrackId(tid) : null;
+    return p ? { tid, ...p } : null;
+  }).filter(Boolean);
+  const totalMin = queue.reduce((sum, item) => {
+    const [m, s] = (item.track.len || '0:0').split(':').map(Number);
+    return sum + m + s / 60;
+  }, 0);
+  const gigs = Array.isArray(savedSet.gigs) ? savedSet.gigs
+    : (savedSet.gig ? [savedSet.gig] : []);
+  const sortedGigs = [...gigs].sort((a, b) =>
+    (b.playedAt || '').localeCompare(a.playedAt || ''));
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 20px' }}>
+      <BackHeader onBack={onBack} title="Sets" fg={fg} border={border} />
+
+      <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5, marginBottom: 2 }}>
+        {savedSet.name}
+      </div>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1,
+        textTransform: 'uppercase', opacity: 0.55, marginBottom: 14,
+      }}>{queue.length} tracks · {Math.floor(totalMin)} min</div>
+
+      <button onClick={() => {
+        if (confirm(`Load "${savedSet.name}" into the builder? This replaces the current builder set.`))
+          onLoadSavedSet(savedSet.id);
+      }} style={{
+        width: '100%', padding: '10px', borderRadius: 8, marginBottom: 14,
+        background: accent, color: '#0E0C0A', border: 'none',
+        fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+        fontFamily: 'inherit', cursor: 'pointer',
+      }}>Load into builder to edit</button>
+
+      {sortedGigs.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.2,
+            textTransform: 'uppercase', opacity: 0.55, marginBottom: 6,
+          }}>Gigs</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sortedGigs.map(g => (
+              <div key={g.id} style={{
+                padding: 10, borderRadius: 8, background: soft, fontSize: 12,
+              }}>
+                <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                  {g.venue || 'Untitled venue'}
+                </div>
+                <div style={{ fontSize: 10, opacity: 0.6,
+                  fontFamily: 'JetBrains Mono, monospace' }}>{g.playedAt || '—'}</div>
+                {g.notes && (
+                  <div style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>{g.notes}</div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -383,67 +620,13 @@ function MobileSet({ queue, savedSets, selectedSetId, setSelectedSetId, activeSe
         <div style={{
           padding: 30, textAlign: 'center', borderRadius: 10,
           border: `1px dashed ${border}`, opacity: 0.7, fontSize: 12,
-        }}>
-          {isBuilder ? (
-            <>
-              <div style={{ marginBottom: 12 }}>
-                Your set is empty. Add tracks from the Library or a Crate.
-              </div>
-              <button onClick={onGoBuild} style={{
-                padding: '8px 14px', borderRadius: 6, border: 'none',
-                background: accent, color: '#0E0C0A',
-                fontSize: 10, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
-                fontFamily: 'inherit', cursor: 'pointer',
-              }}>Browse library</button>
-            </>
-          ) : 'This saved set is empty.'}
-        </div>
+        }}>This saved set is empty.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 20 }}>
-          {queue.map((item, i) => {
-            const r = item.record, t = item.track;
-            return (
-              <div key={item.tid} style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: 10,
-                borderRadius: 8, background: soft,
-              }}>
-                <div style={{
-                  fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700,
-                  color: accent, width: 22, textAlign: 'center',
-                }}>{String(i + 1).padStart(2, '0')}</div>
-                <RecordCover hue={r.cover.hue} shape={r.cover.shape} imageUrl={r.cover.image}
-                  title={r.title} artist={r.artist} size={42}
-                  style={{ width: 42, height: 42, borderRadius: 3, flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {t.title}
-                  </div>
-                  <div style={{ fontSize: 10, opacity: 0.6,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {r.artist}
-                  </div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: 12, fontWeight: 700 }}>{t.bpm ?? '—'}</div>
-                  <div style={{ fontFamily: 'JetBrains Mono, monospace',
-                    fontSize: 9, opacity: 0.6 }}>{t.key ?? '—'}</div>
-                </div>
-                {isBuilder && (
-                  <button onClick={() => onRemoveFromSet(item.tid)}
-                    title="Remove from set"
-                    style={{
-                      width: 24, height: 24, borderRadius: 12,
-                      border: `1px solid ${border}`, background: 'transparent',
-                      color: fg, cursor: 'pointer', flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 13, lineHeight: 1,
-                    }}>×</button>
-                )}
-              </div>
-            );
-          })}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {queue.map((item, i) => (
+            <SetTrackRow key={item.tid} item={item} i={i}
+              accent={accent} soft={soft} fg={fg} border={border} />
+          ))}
         </div>
       )}
     </div>
