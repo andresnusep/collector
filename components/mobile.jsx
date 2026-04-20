@@ -2,11 +2,13 @@
 
 function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrentSetName,
                      onSaveSet, onToggleTrack, onRemoveFromSet, onClearSet, onLoadSavedSet,
+                     profile, setProfile,
                      darkMode, accent }) {
   const [tab, setTab] = React.useState('now');
   const [nowIdx, setNowIdx] = React.useState(0);
   const [openCrateId, setOpenCrateId] = React.useState(null);
   const [libSearch, setLibSearch] = React.useState('');
+  const [profileOpen, setProfileOpen] = React.useState(false);
   // Now tab set selection: null = builder, else saved set id
   const [selectedSetId, setSelectedSetId] = React.useState(null);
   // Set tab sub-page: 'hub' (list), 'builder', or a saved set id (detail)
@@ -43,8 +45,50 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
       background: bg, color: fg,
       display: 'flex', flexDirection: 'column', overflow: 'hidden',
       fontFamily: 'Space Grotesk, -apple-system, system-ui, sans-serif',
+      position: 'relative',
     }}>
-      <div style={{ height: 56, flexShrink: 0 }} />
+      <div style={{
+        flexShrink: 0, height: 56, padding: '10px 18px 6px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
+          textTransform: 'uppercase', opacity: 0.55,
+        }}>Collector Studio</div>
+        {profile && (
+          <ProfileAvatar profile={profile} size={32}
+            onClick={() => setProfileOpen(true)} />
+        )}
+      </div>
+
+      {profileOpen && profile && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 50, background: bg,
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        }}>
+          <div style={{
+            flexShrink: 0, padding: '10px 14px',
+            display: 'flex', alignItems: 'center', gap: 10,
+            borderBottom: `1px solid ${border}`,
+          }}>
+            <button onClick={() => setProfileOpen(false)} style={{
+              width: 30, height: 30, borderRadius: 15,
+              border: `1px solid ${border}`, background: 'transparent',
+              color: fg, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, lineHeight: 1, padding: 0,
+            }}>‹</button>
+            <div style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.2,
+              textTransform: 'uppercase', opacity: 0.55,
+            }}>Profile</div>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 20px' }}>
+            <ProfilePage profile={profile} setProfile={setProfile}
+              records={records} savedSets={savedSets || []} />
+          </div>
+        </div>
+      )}
 
       {tab === 'now' && (
         <MobileNow current={current} nextUp={nextUp} queueLen={queue.length}

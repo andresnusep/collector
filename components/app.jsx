@@ -41,6 +41,13 @@ function CollectorStudio({ tweaks, setTweaks }) {
   const [activeCrateId, setActiveCrateId] = React.useState(null);
   React.useEffect(() => { localStorage.setItem('cs-crates', JSON.stringify(crates)); }, [crates]);
 
+  const [profile, setProfile] = React.useState(() => {
+    const saved = localStorage.getItem('cs-profile');
+    if (saved) { try { return window.migrateProfile(JSON.parse(saved)); } catch {} }
+    return window.migrateProfile(null);
+  });
+  React.useEffect(() => { localStorage.setItem('cs-profile', JSON.stringify(profile)); }, [profile]);
+
   const [savedSets, setSavedSets] = React.useState(() => {
     const saved = localStorage.getItem('cs-saved-sets');
     if (saved) { try { return JSON.parse(saved); } catch {} }
@@ -237,6 +244,7 @@ function CollectorStudio({ tweaks, setTweaks }) {
           onRemoveFromSet={removeFromSet}
           onClearSet={() => setSet([])}
           onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
+          profile={profile} setProfile={setProfile}
           darkMode={tweaks.theme === 'dark'} accent={ACCENTS[tweaks.accent] || tweaks.accent} />
       </div>
     );
@@ -259,7 +267,8 @@ function CollectorStudio({ tweaks, setTweaks }) {
         crates={crates} activeCrateId={activeCrateId} setActiveCrateId={setActiveCrateId}
         onNewCrate={newCrate} onDeleteCrate={deleteCrate}
         savedSets={savedSets} activeSetId={activeSetId} viewingSetId={viewingSetId}
-        onSaveSet={saveCurrentSet} onOpenSet={openSavedSet} onDeleteSet={deleteSavedSet} />
+        onSaveSet={saveCurrentSet} onOpenSet={openSavedSet} onDeleteSet={deleteSavedSet}
+        profile={profile} />
 
       {/* Main */}
       <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -302,6 +311,10 @@ function CollectorStudio({ tweaks, setTweaks }) {
           )}
           {view === 'dashboard' && (
             <Dashboard records={records} set={set} />
+          )}
+          {view === 'profile' && (
+            <ProfilePage profile={profile} setProfile={setProfile}
+              records={records} savedSets={savedSets} />
           )}
           {view === 'crates' && (
             <CratesPage crates={crates} records={records}
@@ -370,6 +383,7 @@ function CollectorStudio({ tweaks, setTweaks }) {
               onRemoveFromSet={removeFromSet}
               onClearSet={() => setSet([])}
               onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
+              profile={profile} setProfile={setProfile}
               darkMode={tweaks.theme === 'dark'} accent={ACCENTS[tweaks.accent] || tweaks.accent} />
           </IOSDevice>
         </div>
@@ -411,7 +425,7 @@ function CollectorStudio({ tweaks, setTweaks }) {
   );
 }
 
-function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet }) {
+function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile }) {
   const stats = {
     total: records.length,
     genres: new Set(records.map(r => r.genre)).size,
@@ -425,7 +439,7 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
       overflow: 'hidden',
     }}>
       {/* Wordmark */}
-      <div style={{ marginBottom: 26 }}>
+      <div style={{ marginBottom: 18 }}>
         <div style={{
           fontSize: 22, fontWeight: 800, letterSpacing: -0.8, lineHeight: 0.95,
         }}>
@@ -436,6 +450,27 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
           textTransform: 'uppercase', color: 'var(--dim)', marginTop: 6,
         }}>For vinyl DJs · v0.4</div>
       </div>
+
+      {/* Profile chip */}
+      <button onClick={() => setView('profile')} style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 10px', marginBottom: 20, borderRadius: 10,
+        background: view === 'profile' ? 'var(--hover)' : 'transparent',
+        border: '1px solid var(--border)',
+        color: 'var(--fg)', fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+      }}>
+        <ProfileAvatar profile={profile} size={34} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {profile.djName || profile.name || 'Set up profile'}
+          </div>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1,
+            textTransform: 'uppercase', color: 'var(--dim)',
+          }}>{profile.djName && profile.name ? profile.name : 'Edit your profile'}</div>
+        </div>
+      </button>
 
       <div style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
@@ -453,6 +488,8 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
           badge={set.length > 0 ? set.length : null} accent={set.length > 0} />
         <NavItem icon={Icon.Grid} label="Dashboard"
           active={view === 'dashboard'} onClick={() => setView('dashboard')} />
+        <NavItem icon={Icon.User} label="Profile"
+          active={view === 'profile'} onClick={() => setView('profile')} />
       </nav>
 
       <SavedSetsList savedSets={savedSets} currentSet={set}
