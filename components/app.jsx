@@ -1,6 +1,14 @@
 // Main app shell
 
 function CollectorStudio({ tweaks, setTweaks }) {
+  const [isPhone, setIsPhone] = React.useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches);
+  React.useEffect(() => {
+    const mql = window.matchMedia('(max-width: 640px)');
+    const handler = (e) => setIsPhone(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
   const [view, setView] = React.useState('collection'); // collection | set | sets | dashboard
   const [viewingSetId, setViewingSetId] = React.useState(null);
   const [gigMode, setGigMode] = React.useState(false);
@@ -214,6 +222,24 @@ function CollectorStudio({ tweaks, setTweaks }) {
     onlyInSet: advFilters.onlyInSet, set,
   });
   const availableGenres = ['All', ...new Set(records.map(r => r.genre).filter(Boolean))].sort();
+
+  if (isPhone) {
+    return (
+      <div className={`app ${tweaks.theme}`} style={{
+        height: '100vh', width: '100vw', overflow: 'hidden',
+        background: 'var(--bg)', color: 'var(--fg)',
+      }}>
+        <MobileApp records={records} set={set} crates={crates} savedSets={savedSets}
+          currentSetName={currentSetName} setCurrentSetName={setCurrentSetName}
+          onSaveSet={saveCurrentSet}
+          onToggleTrack={toggleTrack}
+          onRemoveFromSet={removeFromSet}
+          onClearSet={() => setSet([])}
+          onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
+          darkMode={tweaks.theme === 'dark'} accent={ACCENTS[tweaks.accent] || tweaks.accent} />
+      </div>
+    );
+  }
 
   return (
     <div className={`app ${tweaks.theme}`} style={{
