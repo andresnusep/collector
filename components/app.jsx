@@ -226,7 +226,7 @@ function CollectorStudio({ tweaks, setTweaks }) {
   if (isPhone) {
     return (
       <div className={`app ${tweaks.theme}`} style={{
-        height: '100vh', width: '100vw', overflow: 'hidden',
+        height: '100dvh', width: '100vw', overflow: 'hidden',
         background: 'var(--bg)', color: 'var(--fg)',
       }}>
         <MobileApp records={records} set={set} crates={crates} savedSets={savedSets}

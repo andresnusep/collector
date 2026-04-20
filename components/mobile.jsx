@@ -77,7 +77,8 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
 
       {/* Tab bar */}
       <div style={{
-        flexShrink: 0, display: 'flex', padding: '6px 6px 28px',
+        flexShrink: 0, display: 'flex',
+        padding: '6px 6px calc(8px + env(safe-area-inset-bottom))',
         borderTop: `1px solid ${border}`, background: bg,
       }}>
         {[
