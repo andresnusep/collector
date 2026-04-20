@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Collector Studio — for vinyl DJs</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="description" content="A studio for vinyl DJs: catalog your collection, organize crates, build sets with harmonic mixing, and log your gigs." />
+<meta name="theme-color" content="#0E0C0A" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Collector Studio — for vinyl DJs" />
+<meta property="og:description" content="Catalog your records. Organize crates. Build sets. Log gigs." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="referrer" content="strict-origin-when-cross-origin" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+  body {
+    font-family: 'Space Grotesk', -apple-system, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .app.dark {
+    --bg: #0E0C0A;
+    --fg: #F4EFE6;
+    --dim: rgba(244,239,230,0.55);
+    --border: rgba(244,239,230,0.10);
+    --hover: rgba(244,239,230,0.04);
+    --panel: #17130F;
+    --sidebar-bg: #0A0806;
+    --on-accent: #0E0C0A;
+  }
+  .app.light {
+    --bg: #F4EFE6;
+    --fg: #0E0C0A;
+    --dim: rgba(14,12,10,0.55);
+    --border: rgba(14,12,10,0.12);
+    --hover: rgba(14,12,10,0.04);
+    --panel: #FBF8F1;
+    --sidebar-bg: #EDE6D7;
+    --on-accent: #0E0C0A;
+  }
+  .app.warm {
+    --bg: #1A1410;
+    --fg: #F4DCB8;
+    --dim: rgba(244,220,184,0.55);
+    --border: rgba(244,220,184,0.12);
+    --hover: rgba(244,220,184,0.05);
+    --panel: #241B14;
+    --sidebar-bg: #120D09;
+    --on-accent: #1A1410;
+  }
+
+  button { font-family: inherit; }
+  input { font-family: inherit; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--dim); }
+
+  /* Tweaks panel */
+  .tweaks-panel {
+    position: fixed; right: 20px; bottom: 20px;
+    width: 280px; padding: 16px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    z-index: 100; display: none;
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--fg);
+  }
+  .tweaks-panel.open { display: block; }
+  .tweaks-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim);
+  }
+  .tweaks-row { margin-bottom: 14px; }
+  .tweaks-row:last-child { margin-bottom: 0; }
+  .tweaks-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    letter-spacing: 1.2px; text-transform: uppercase; color: var(--dim);
+    margin-bottom: 6px; display: block;
+  }
+  .tweaks-seg {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+    gap: 2px; padding: 2px;
+    background: var(--hover); border-radius: 6px; border: 1px solid var(--border);
+  }
+  .tweaks-seg button {
+    padding: 6px 8px; border: none; border-radius: 4px;
+    background: transparent; color: var(--fg); cursor: pointer;
+    font-size: 11px; font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .tweaks-seg button.active { background: var(--accent); color: var(--on-accent); }
+  .tweaks-accents { display: flex; gap: 8px; }
+  .tweaks-accents button {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid var(--border); cursor: pointer; padding: 0;
+  }
+  .tweaks-accents button.active { border-color: var(--fg); transform: scale(1.1); }
+
+  .tweak-toggle-btn {
+    position: fixed; right: 20px; bottom: 20px;
+    width: 44px; height: 44px; border-radius: 22px;
+    background: var(--accent); color: var(--on-accent);
+    border: none; cursor: pointer; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 99;
+  }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script src="data/records.js"></script>
+<script src="data/audio-store.js"></script>
+<script type="text/babel" src="frames/ios-frame.jsx"></script>
+<script type="text/babel" src="components/atoms.jsx"></script>
+<script type="text/babel" src="components/covers.jsx"></script>
+<script type="text/babel" src="components/collection.jsx"></script>
+<script type="text/babel" src="components/detail.jsx"></script>
+<script type="text/babel" src="components/set-builder.jsx"></script>
+<script type="text/babel" src="components/mobile.jsx"></script>
+<script type="text/babel" src="components/discogs.jsx"></script>
+<script type="text/babel" src="components/record-form.jsx"></script>
+<script type="text/babel" src="components/analyze.jsx"></script>
+<script type="text/babel" src="components/advanced.jsx"></script>
+<script type="text/babel" src="components/more.jsx"></script>
+<script type="text/babel" src="components/app.jsx"></script>
+
+<script>
+  const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+    "theme": "light",
+    "accent": "acid",
+    "density": "comfortable",
+    "viewStyle": "grid",
+    "showOverlays": true
+  }/*EDITMODE-END*/;
+
+  const ACCENTS = {
+    acid: '#E8FF4A',
+    hotpink: '#FF4A9E',
+    cyan: '#4AE8FF',
+    tangerine: '#FF8A3D',
+    violet: '#B07AFF',
+  };
+</script>
+
+<script type="text/babel">
+function Root() {
+  const [tweaks, setTweaks] = React.useState(() => {
+    const saved = localStorage.getItem('cs-tweaks');
+    if (saved) { try { return { ...TWEAK_DEFAULTS, ...JSON.parse(saved) }; } catch {} }
+    return TWEAK_DEFAULTS;
+  });
+  const [editMode, setEditMode] = React.useState(false);
+
+  React.useEffect(() => {
+    localStorage.setItem('cs-tweaks', JSON.stringify(tweaks));
+    document.documentElement.style.setProperty('--accent', ACCENTS[tweaks.accent] || tweaks.accent);
+  }, [tweaks]);
+
+  // Edit mode protocol
+  React.useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === '__activate_edit_mode') setEditMode(true);
+      else if (e.data?.type === '__deactivate_edit_mode') setEditMode(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const updateTweak = (patch) => {
+    const next = { ...tweaks, ...patch };
+    setTweaks(next);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: patch }, '*');
+  };
+
+  return (
+    <>
+      <CollectorStudio tweaks={tweaks} setTweaks={setTweaks} />
+      {editMode && (
+        <div className="tweaks-panel open">
+          <div className="tweaks-header">
+            <span>Tweaks</span>
+            <span style={{ color: 'var(--accent)' }}>● live</span>
+          </div>
+
+          <div className="tweaks-row">
+            <span className="tweaks-label">Theme</span>
+            <div className="tweaks-seg">
+              {['dark', 'light', 'warm'].map(t => (
+                <button key={t} className={tweaks.theme === t ? 'active' : ''}
+                  onClick={() => updateTweak({ theme: t })}>{t}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="tweaks-row">
+            <span className="tweaks-label">Accent</span>
+            <div className="tweaks-accents">
+              {Object.entries(ACCENTS).map(([key, hex]) => (
+                <button key={key} className={tweaks.accent === key ? 'active' : ''}
+                  style={{ background: hex }} onClick={() => updateTweak({ accent: key })} title={key} />
+              ))}
+            </div>
+          </div>
+
+          <div className="tweaks-row">
+            <span className="tweaks-label">Collection view</span>
+            <div className="tweaks-seg">
+              {['grid', 'list', 'stack'].map(v => (
+                <button key={v} className={tweaks.viewStyle === v ? 'active' : ''}
+                  onClick={() => updateTweak({ viewStyle: v })}>{v}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="tweaks-row">
+            <span className="tweaks-label">Density</span>
+            <div className="tweaks-seg">
+              {['comfortable', 'compact'].map(d => (
+                <button key={d} className={tweaks.density === d ? 'active' : ''}
+                  onClick={() => updateTweak({ density: d })}>{d}</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="tweaks-row">
+            <span className="tweaks-label">BPM / Key overlays</span>
+            <div className="tweaks-seg">
+              <button className={tweaks.showOverlays ? 'active' : ''}
+                onClick={() => updateTweak({ showOverlays: true })}>Show</button>
+              <button className={!tweaks.showOverlays ? 'active' : ''}
+                onClick={() => updateTweak({ showOverlays: false })}>Hide</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+</script>
+
+</body>
+</html>
