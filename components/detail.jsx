@@ -167,7 +167,6 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
 
       <div style={{ padding: '0 20px 20px', display: 'flex', gap: 10 }}>
         <ApiPill icon={Icon.Discogs} label="Discogs" status="Synced · 2d ago" color="oklch(0.7 0.04 80)" />
-        <ApiPill icon={Icon.Spotify} label="Spotify" status="Preview ready" color="oklch(0.75 0.18 145)" />
       </div>
 
       {/* Tracklist — track-level add to set */}
