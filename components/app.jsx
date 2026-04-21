@@ -226,34 +226,47 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       ]);
       if (cancelled) return;
 
-      const hasCloudData = cloudProfile || cloudRecords.length || cloudSets.length
-        || cloudCrates.length || cloudWorkspace;
+      // Merge local + cloud by id. Cloud wins on conflicts; local-only items
+      // get uploaded so nothing is lost when a device signs in after another
+      // device already populated the cloud.
+      const mergeById = (local, cloud) => {
+        const m = new Map();
+        for (const x of local) m.set(x.id, x);
+        for (const x of cloud) m.set(x.id, x); // cloud overwrites
+        return Array.from(m.values());
+      };
+      const localOnly = (local, cloud) => {
+        const cloudIds = new Set(cloud.map(x => x.id));
+        return local.filter(x => !cloudIds.has(x.id));
+      };
 
-      if (hasCloudData) {
-        if (cloudProfile) setProfile(window.migrateProfile(cloudProfile));
-        if (cloudRecords.length) setRecords(cloudRecords);
-        setSavedSets(cloudSets);
-        setCrates(cloudCrates);
-        if (cloudWorkspace) {
-          if (Array.isArray(cloudWorkspace.set)) setSet(cloudWorkspace.set);
-          if (typeof cloudWorkspace.currentSetName === 'string') setCurrentSetName(cloudWorkspace.currentSetName);
-          if (cloudWorkspace.activeSetId !== undefined) setActiveSetId(cloudWorkspace.activeSetId);
-        }
-      } else {
-        // First-time sign-in with local data: push what we have to the cloud.
-        await Promise.all([
-          window.Sync.upsertProfile(profile),
-          ...records.map(r => window.Sync.upsertRecord(r)),
-          ...savedSets.map(s => window.Sync.upsertSavedSet(s)),
-          ...crates.map(c => window.Sync.upsertCrate(c)),
-          window.Sync.upsertWorkspace({ set, activeSetId, currentSetName }),
-        ]);
+      const mergedRecords  = mergeById(records,   cloudRecords);
+      const mergedSets     = mergeById(savedSets, cloudSets);
+      const mergedCrates   = mergeById(crates,    cloudCrates);
+
+      setProfile(window.migrateProfile(cloudProfile || profile));
+      setRecords(mergedRecords);
+      setSavedSets(mergedSets);
+      setCrates(mergedCrates);
+      if (cloudWorkspace) {
+        if (Array.isArray(cloudWorkspace.set)) setSet(cloudWorkspace.set);
+        if (typeof cloudWorkspace.currentSetName === 'string') setCurrentSetName(cloudWorkspace.currentSetName);
+        if (cloudWorkspace.activeSetId !== undefined) setActiveSetId(cloudWorkspace.activeSetId);
       }
 
-      // Prime refs so write-through doesn't double-upsert what we just loaded.
-      prevRecordsRef.current = cloudRecords.length ? cloudRecords : records;
-      prevSetsRef.current = cloudSets.length ? cloudSets : savedSets;
-      prevCratesRef.current = cloudCrates.length ? cloudCrates : crates;
+      // Push anything that only exists locally so the cloud catches up.
+      await Promise.all([
+        !cloudProfile && window.Sync.upsertProfile(profile),
+        !cloudWorkspace && window.Sync.upsertWorkspace({ set, activeSetId, currentSetName }),
+        ...localOnly(records,   cloudRecords).map(r => window.Sync.upsertRecord(r)),
+        ...localOnly(savedSets, cloudSets).map(s => window.Sync.upsertSavedSet(s)),
+        ...localOnly(crates,    cloudCrates).map(c => window.Sync.upsertCrate(c)),
+      ].filter(Boolean));
+
+      // Prime refs so write-through doesn't re-upsert what we just merged.
+      prevRecordsRef.current = mergedRecords;
+      prevSetsRef.current    = mergedSets;
+      prevCratesRef.current  = mergedCrates;
       setHydrated(true);
     })();
     return () => { cancelled = true; };
