@@ -192,12 +192,14 @@ const secondaryBtnStyle2 = {
 
 // ─────────── API ───────────
 
-async function lookupGetSongBpm(artist, title, apiKey) {
+async function lookupGetSongBpm(artist, title, _ignoredKey) {
   if (!artist || !title) return null;
   const cleanArtist = artist.replace(/\s*&\s*/g, ' ').trim();
   const cleanTitle = title.replace(/\s*\([^)]*\)/g, '').trim();
   const lookup = `song:${cleanTitle}+artist:${cleanArtist}`;
-  const url = `https://api.getsongbpm.com/search/?api_key=${encodeURIComponent(apiKey)}&type=both&lookup=${encodeURIComponent(lookup)}`;
+  // Call our Supabase edge function (has CORS + stores the real API key server-side).
+  const base = 'https://iqnqwweukbcjgyspqbyg.supabase.co/functions/v1/bpm-lookup';
+  const url = `${base}?lookup=${encodeURIComponent(lookup)}`;
   const res = await fetch(url);
   if (!res.ok) return null;
   const data = await res.json();
