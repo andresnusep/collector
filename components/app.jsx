@@ -663,49 +663,50 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
       </div>
 
       {view === 'collection' && (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {/* Search */}
-          <div style={{
-            flex: 1, display: 'flex', alignItems: 'center', gap: 8,
-            padding: '8px 12px', borderRadius: 6,
-            background: 'var(--hover)', border: '1px solid var(--border)',
-            maxWidth: 320,
-          }}>
-            <span style={{ color: 'var(--dim)' }}>{Icon.Search}</span>
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search title, artist, label…"
-              style={{
-                flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                color: 'var(--fg)', fontSize: 13, fontFamily: 'inherit',
-              }} />
+        <>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {/* Search */}
+            <div style={{
+              flex: 1, display: 'flex', alignItems: 'center', gap: 8,
+              padding: '8px 12px', borderRadius: 6,
+              background: 'var(--hover)', border: '1px solid var(--border)',
+            }}>
+              <span style={{ color: 'var(--dim)' }}>{Icon.Search}</span>
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search title, artist, label…"
+                style={{
+                  flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                  color: 'var(--fg)', fontSize: 13, fontFamily: 'inherit',
+                }} />
+            </div>
+
+            {/* Advanced filter popover */}
+            <FilterPopover filters={advFilters} setFilters={setAdvFilters} records={records} />
+
+            {/* View style */}
+            <div style={{ display: 'flex', gap: 4, border: '1px solid var(--border)', borderRadius: 6, padding: 3 }}>
+              {[
+                { id: 'grid', icon: Icon.Grid },
+                { id: 'list', icon: Icon.List },
+                { id: 'stack', icon: Icon.Stack },
+              ].map(v => (
+                <button key={v.id} onClick={() => setViewStyle(v.id)} style={{
+                  width: 28, height: 24, border: 'none', borderRadius: 4,
+                  background: viewStyle === v.id ? 'var(--accent)' : 'transparent',
+                  color: viewStyle === v.id ? 'var(--on-accent)' : 'var(--fg)',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>{v.icon}</button>
+              ))}
+            </div>
           </div>
 
-          {/* Genre filter chips (dynamic from data) */}
-          <div style={{ display: 'flex', gap: 4, overflowX: 'auto', flex: 1 }}>
+          {/* Genre filter chips — dedicated row for breathing room */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
             {availableGenres.map(g => (
               <Tag key={g} onClick={() => setGenreFilter(g)} active={genreFilter === g} size="sm">{g}</Tag>
             ))}
           </div>
-
-          {/* Advanced filter popover */}
-          <FilterPopover filters={advFilters} setFilters={setAdvFilters} records={records} />
-
-          {/* View style */}
-          <div style={{ display: 'flex', gap: 4, border: '1px solid var(--border)', borderRadius: 6, padding: 3 }}>
-            {[
-              { id: 'grid', icon: Icon.Grid },
-              { id: 'list', icon: Icon.List },
-              { id: 'stack', icon: Icon.Stack },
-            ].map(v => (
-              <button key={v.id} onClick={() => setViewStyle(v.id)} style={{
-                width: 28, height: 24, border: 'none', borderRadius: 4,
-                background: viewStyle === v.id ? 'var(--accent)' : 'transparent',
-                color: viewStyle === v.id ? 'var(--on-accent)' : 'var(--fg)',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>{v.icon}</button>
-            ))}
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
