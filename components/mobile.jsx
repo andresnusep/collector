@@ -106,6 +106,8 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
       {tab === 'now' && (
         <MobileNow current={current} nextUp={nextUp} queueLen={queue.length}
           position={nowIdx % queue.length}
+          queue={queue}
+          onJumpTo={(i) => setNowIdx(i)}
           onNext={() => setNowIdx(i => (i + 1) % queue.length)}
           onPrev={() => setNowIdx(i => (i - 1 + queue.length) % queue.length)}
           savedSets={savedSets || []} selectedSetId={selectedSetId}
@@ -260,13 +262,53 @@ function PickerRow({ label, sublabel, selected, accent, onClick }) {
   );
 }
 
+// Camelot harmonic distance: 0 = same key, 1 = adjacent on wheel or relative major/minor,
+// 2+ = further / clashing. Null keys get a neutral penalty.
+function camelotDistance(a, b) {
+  if (!a || !b) return 3;
+  const parse = (k) => {
+    const m = String(k).trim().match(/^(\d{1,2})([AB])$/i);
+    if (!m) return null;
+    return { n: parseInt(m[1], 10), ab: m[2].toUpperCase() };
+  };
+  const pa = parse(a), pb = parse(b);
+  if (!pa || !pb) return 3;
+  if (pa.n === pb.n && pa.ab === pb.ab) return 0;
+  // Relative major/minor: same number, different letter
+  if (pa.n === pb.n) return 1;
+  // Circle distance (1..12 wrap)
+  let d = Math.abs(pa.n - pb.n);
+  if (d > 6) d = 12 - d;
+  // Same letter family gets lower penalty than cross-family jumps
+  return pa.ab === pb.ab ? d : d + 1;
+}
+
 // ─────────── Now (gig mode) ───────────
 
-function MobileNow({ current, nextUp, queueLen, position, onNext, onPrev,
+function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNext, onPrev,
                     savedSets, selectedSetId, setSelectedSetId, activeSetLabel,
                     accent, fg, bg, soft, border }) {
   if (!current) return null;
   const r = current.record, t = current.track;
+
+  // ── Mix suggestions: pick the best next tracks FROM THIS SET only ──
+  // Primary weight: BPM closeness (user preference). Tiebreaker: Camelot key.
+  const suggestions = React.useMemo(() => {
+    if (!queue || queue.length < 2 || t.bpm == null) return [];
+    const currentBpm = t.bpm;
+    const currentKey = t.key;
+    const pool = queue
+      .map((q, i) => ({ ...q, qIdx: i }))
+      .filter((q, i) => i !== position && q.track.bpm != null);
+    const scored = pool.map(q => {
+      const bpmDiff = Math.abs(q.track.bpm - currentBpm);
+      const keyPenalty = camelotDistance(currentKey, q.track.key);
+      // BPM-first: score = bpmDiff * 2 + keyPenalty (key still matters but doesn't dominate)
+      return { ...q, bpmDiff, keyPenalty, score: bpmDiff * 2 + keyPenalty };
+    });
+    scored.sort((a, b) => a.score - b.score);
+    return scored.slice(0, 3);
+  }, [queue, position, t.bpm, t.key]);
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column',
       padding: '0 18px', overflowY: 'auto' }}>
@@ -347,6 +389,58 @@ function MobileNow({ current, nextUp, queueLen, position, onNext, onPrev,
                 {nextUp.track.key ?? '—'}
               </div>
             </div>
+          </div>
+        </>
+      )}
+
+      {suggestions.length > 0 && (
+        <>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
+          }}>Mix suggestions · from this set</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+            {suggestions.map(s => {
+              const harm = s.keyPenalty === 0 ? 'same key'
+                : s.keyPenalty === 1 ? 'harmonic'
+                : s.keyPenalty <= 2 ? 'close' : 'clash';
+              const tag = s.bpmDiff === 0 ? 'exact BPM'
+                : s.bpmDiff <= 3 ? `±${s.bpmDiff} BPM`
+                : `±${s.bpmDiff} BPM`;
+              const good = s.bpmDiff <= 4 && s.keyPenalty <= 1;
+              return (
+                <button key={s.tid} onClick={() => onJumpTo && onJumpTo(s.qIdx)} style={{
+                  display: 'flex', gap: 10, alignItems: 'center', padding: 10,
+                  borderRadius: 10, background: soft,
+                  border: `1px solid ${good ? accent : border}`,
+                  color: fg, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+                  width: '100%',
+                }}>
+                  <RecordCover hue={s.record.cover.hue} shape={s.record.cover.shape}
+                    imageUrl={s.record.cover.image}
+                    title={s.record.title} artist={s.record.artist} size={42}
+                    style={{ width: 42, height: 42, borderRadius: 4, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.track.title}
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.6,
+                      fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3 }}>
+                      {tag} · {harm}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 14, fontWeight: 700, color: good ? accent : fg }}>
+                      {s.track.bpm}
+                    </div>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 9, opacity: 0.65 }}>{s.track.key ?? '—'}</div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </>
       )}
