@@ -173,10 +173,10 @@ function Root() {
   const session = useSession();
 
   // Namespace localStorage per user so friends share a browser without clobbering each other.
-  React.useEffect(() => {
-    const userId = session?.user?.id || null;
-    if (window.__csUserId === userId) return;
-    window.__csUserId = userId;
+  // MUST run synchronously during render (before child state initializers read storage),
+  // otherwise reads hit the unprefixed key while writes hit the prefixed one.
+  const userId = session?.user?.id || null;
+  if (window.__csUserId !== userId) {
     const ns = userId ? `cs-u-${userId}-` : 'cs-';
     const origGet = Storage.prototype.__origGet || localStorage.getItem.bind(localStorage);
     const origSet = Storage.prototype.__origSet || localStorage.setItem.bind(localStorage);
@@ -189,7 +189,15 @@ function Root() {
     localStorage.getItem = (k) => keys.includes(k) ? origGet(ns + k) : origGet(k);
     localStorage.setItem = (k, v) => keys.includes(k) ? origSet(ns + k, v) : origSet(k, v);
     localStorage.removeItem = (k) => keys.includes(k) ? origDel(ns + k) : origDel(k);
-  }, [session?.user?.id]);
+    // One-time migration: if the namespaced slot is empty but legacy un-prefixed
+    // data exists, copy it over so existing users don't lose their collection.
+    if (userId) {
+      for (const k of keys) {
+        if (origGet(ns + k) == null && origGet(k) != null) origSet(ns + k, origGet(k));
+      }
+    }
+    window.__csUserId = userId;
+  }
 
   React.useEffect(() => {
     localStorage.setItem('cs-tweaks', JSON.stringify(tweaks));
