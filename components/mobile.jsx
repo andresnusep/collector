@@ -159,7 +159,7 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
           { id: 'lib', label: 'Library', icon: Icon.Dig },
           { id: 'crates', label: 'Crates', icon: Icon.Heart },
           { id: 'set', label: 'Sets', icon: Icon.Deck },
-          { id: 'now', label: 'Now', icon: Icon.Disc },
+          { id: 'now', label: 'Gig', icon: Icon.Disc },
         ].map(t => (
           <button key={t.id} onClick={() => {
             if (t.id === 'set') setSetPage('hub');
@@ -278,7 +278,7 @@ function MobileNow({ current, nextUp, queueLen, position, onNext, onPrev,
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
         textTransform: 'uppercase', opacity: 0.55,
       }}>
-        <span>Now playing</span>
+        <span>Gig · now playing</span>
         <span>{String(position + 1).padStart(2, '0')} / {String(queueLen).padStart(2, '0')}</span>
       </div>
 
