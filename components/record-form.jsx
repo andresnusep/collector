@@ -44,6 +44,7 @@ function RecordFormModal({ open, initial, onClose, onSave, onDelete }) {
       year: draft.year ? Number(draft.year) : null,
       value: Number(draft.value) || 0,
       energy: Number(draft.energy) || 5,
+      rpm: Number(draft.rpm) || 33,
       tracks: draft.tracks.map(t => ({
         ...t,
         bpm: t.bpm === '' || t.bpm == null ? null : Number(t.bpm),
@@ -111,6 +112,13 @@ function RecordFormModal({ open, initial, onClose, onSave, onDelete }) {
             <input type="number" value={draft.bpm ?? ''} onChange={e => patch({ bpm: e.target.value })} style={inp} /></FField>
           <FField label="Key (Camelot, e.g. 8A)">
             <input value={draft.key || ''} onChange={e => patch({ key: e.target.value.toUpperCase() })} style={inp} /></FField>
+          <FField label="Speed (RPM)">
+            <select value={draft.rpm || 33} onChange={e => patch({ rpm: Number(e.target.value) })}
+              style={inp}>
+              <option value={33}>33⅓</option>
+              <option value={45}>45</option>
+              <option value={78}>78</option>
+            </select></FField>
           <FField label="Energy (1–10)">
             <input type="number" min="1" max="10" value={draft.energy}
               onChange={e => patch({ energy: e.target.value })} style={inp} /></FField>

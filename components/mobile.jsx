@@ -347,10 +347,12 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
       </div>
 
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18,
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 18,
       }}>
         <BigStat label="BPM" value={t.bpm ?? '—'} accent={accent} />
         <BigStat label="Key" value={t.key ?? '—'} accent={accent} small />
+        <BigStat label="RPM" value={r.rpm ? (r.rpm === 33 ? '33⅓' : r.rpm) : '33⅓'}
+          accent={accent} small />
       </div>
 
       {/* Up next — prominent */}

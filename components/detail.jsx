@@ -143,12 +143,13 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
         <div style={{ fontSize: 18, color: 'var(--dim)', marginTop: 6 }}>{record.artist}</div>
 
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0,
+          display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0,
           marginTop: 22, padding: '16px 0',
           borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)',
         }}>
           <Stat label="BPM" value={record.bpm ?? '—'} />
           <Stat label="Key" value={<KeyBadge k={record.key} size={15} />} />
+          <Stat label="RPM" value={record.rpm ? `${record.rpm}` : '33'} />
           <Stat label="Tracks" value={record.tracks.length} />
           <Stat label="Value" value={`$${record.value || 0}`} />
         </div>
