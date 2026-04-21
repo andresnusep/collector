@@ -204,6 +204,115 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     localStorage.setItem('cs-records', JSON.stringify(records));
     window.RECORDS = records; // keep global in sync for parseTrackId
   }, [records]);
+
+  // ── Supabase sync ──────────────────────────────────────────────────────
+  const [hydrated, setHydrated] = React.useState(false);
+  const prevRecordsRef = React.useRef(null);
+  const prevSetsRef = React.useRef(null);
+  const prevCratesRef = React.useRef(null);
+
+  // Hydrate from Supabase on mount. If cloud is empty but we have local data,
+  // migrate local data up so first-time users don't lose what they already built.
+  React.useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const [cloudProfile, cloudRecords, cloudSets, cloudCrates, cloudWorkspace] = await Promise.all([
+        window.Sync.fetchProfile(),
+        window.Sync.fetchRecords(),
+        window.Sync.fetchSavedSets(),
+        window.Sync.fetchCrates(),
+        window.Sync.fetchWorkspace(),
+      ]);
+      if (cancelled) return;
+
+      const hasCloudData = cloudProfile || cloudRecords.length || cloudSets.length
+        || cloudCrates.length || cloudWorkspace;
+
+      if (hasCloudData) {
+        if (cloudProfile) setProfile(window.migrateProfile(cloudProfile));
+        if (cloudRecords.length) setRecords(cloudRecords);
+        setSavedSets(cloudSets);
+        setCrates(cloudCrates);
+        if (cloudWorkspace) {
+          if (Array.isArray(cloudWorkspace.set)) setSet(cloudWorkspace.set);
+          if (typeof cloudWorkspace.currentSetName === 'string') setCurrentSetName(cloudWorkspace.currentSetName);
+          if (cloudWorkspace.activeSetId !== undefined) setActiveSetId(cloudWorkspace.activeSetId);
+        }
+      } else {
+        // First-time sign-in with local data: push what we have to the cloud.
+        await Promise.all([
+          window.Sync.upsertProfile(profile),
+          ...records.map(r => window.Sync.upsertRecord(r)),
+          ...savedSets.map(s => window.Sync.upsertSavedSet(s)),
+          ...crates.map(c => window.Sync.upsertCrate(c)),
+          window.Sync.upsertWorkspace({ set, activeSetId, currentSetName }),
+        ]);
+      }
+
+      // Prime refs so write-through doesn't double-upsert what we just loaded.
+      prevRecordsRef.current = cloudRecords.length ? cloudRecords : records;
+      prevSetsRef.current = cloudSets.length ? cloudSets : savedSets;
+      prevCratesRef.current = cloudCrates.length ? cloudCrates : crates;
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // Write-through: profile (debounced)
+  const upsertProfileDebounced = React.useMemo(
+    () => window.debounce(window.Sync.upsertProfile, 600), []);
+  React.useEffect(() => {
+    if (!hydrated) return;
+    upsertProfileDebounced(profile);
+  }, [profile, hydrated]);
+
+  // Write-through: records (diff upsert/delete)
+  React.useEffect(() => {
+    if (!hydrated) return;
+    const prev = prevRecordsRef.current || [];
+    window.diffArraySync({
+      prev, curr: records,
+      getId: (r) => r.id,
+      onUpsert: (r) => window.Sync.upsertRecord(r),
+      onDelete: (id) => window.Sync.deleteRecord(id),
+    });
+    prevRecordsRef.current = records;
+  }, [records, hydrated]);
+
+  // Write-through: saved sets
+  React.useEffect(() => {
+    if (!hydrated) return;
+    const prev = prevSetsRef.current || [];
+    window.diffArraySync({
+      prev, curr: savedSets,
+      getId: (s) => s.id,
+      onUpsert: (s) => window.Sync.upsertSavedSet(s),
+      onDelete: (id) => window.Sync.deleteSavedSet(id),
+    });
+    prevSetsRef.current = savedSets;
+  }, [savedSets, hydrated]);
+
+  // Write-through: crates
+  React.useEffect(() => {
+    if (!hydrated) return;
+    const prev = prevCratesRef.current || [];
+    window.diffArraySync({
+      prev, curr: crates,
+      getId: (c) => c.id,
+      onUpsert: (c) => window.Sync.upsertCrate(c),
+      onDelete: (id) => window.Sync.deleteCrate(id),
+    });
+    prevCratesRef.current = crates;
+  }, [crates, hydrated]);
+
+  // Write-through: workspace (current builder + active set + name, debounced)
+  const upsertWorkspaceDebounced = React.useMemo(
+    () => window.debounce(window.Sync.upsertWorkspace, 600), []);
+  React.useEffect(() => {
+    if (!hydrated) return;
+    upsertWorkspaceDebounced({ set, activeSetId, currentSetName });
+  }, [set, activeSetId, currentSetName, hydrated]);
   const isTrackInSet = (tid) => set.includes(tid);
   // Record has "some" track in set
   const recordInSet = (rid) => {
