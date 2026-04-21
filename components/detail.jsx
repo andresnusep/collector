@@ -4,6 +4,7 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
   const [playing, setPlaying] = React.useState(null);
   const [progress, setProgress] = React.useState({});
   const [audioMap, setAudioMap] = React.useState({}); // trackId -> object URL
+  const [previewMap, setPreviewMap] = React.useState({}); // trackId -> iTunes preview URL
   const audioRef = React.useRef(null);
 
   // Load which tracks have uploaded audio for this record
@@ -25,25 +26,38 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
     return () => window.removeEventListener('cs-audio-change', h);
   }, [refreshAudio]);
 
-  // Fallback simulated progress when track has no uploaded audio
+  // When a track starts playing without uploaded audio, look up its iTunes preview.
   React.useEffect(() => {
-    if (!playing || audioMap[playing]) return;
-    const id = setInterval(() => {
-      setProgress(p => {
-        const next = (p[playing] || 0) + 0.01;
-        if (next >= 1) { setPlaying(null); return { ...p, [playing]: 0 }; }
-        return { ...p, [playing]: next };
-      });
-    }, 80);
-    return () => clearInterval(id);
-  }, [playing, audioMap]);
+    if (!playing || audioMap[playing] || previewMap[playing] !== undefined) return;
+    const idx = Number(playing.split('-').pop());
+    const t = record?.tracks?.[idx];
+    if (!t) return;
+    let cancelled = false;
+    (async () => {
+      const url = await window.iTunesPreview.getPreview(playing, record.artist, t.title || record.title);
+      if (!cancelled) setPreviewMap(m => ({ ...m, [playing]: url || null }));
+    })();
+    return () => { cancelled = true; };
+  }, [playing, audioMap, previewMap, record]);
 
-  // Real <audio> playback when a file is uploaded
+  // Real <audio> playback: uploaded audio wins, else iTunes preview, else simulated progress.
   React.useEffect(() => {
-    if (!playing || !audioMap[playing]) return;
+    if (!playing) return;
+    const src = audioMap[playing] || previewMap[playing];
+    if (!src) {
+      // No real audio available yet (either still looking up, or confirmed miss) → simulate.
+      const id = setInterval(() => {
+        setProgress(p => {
+          const next = (p[playing] || 0) + 0.01;
+          if (next >= 1) { setPlaying(null); return { ...p, [playing]: 0 }; }
+          return { ...p, [playing]: next };
+        });
+      }, 80);
+      return () => clearInterval(id);
+    }
     const a = audioRef.current;
     if (!a) return;
-    a.src = audioMap[playing];
+    a.src = src;
     a.play().catch(() => setPlaying(null));
     const tick = () => {
       if (a.duration) setProgress(p => ({ ...p, [playing]: a.currentTime / a.duration }));
@@ -56,7 +70,7 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
       a.removeEventListener('ended', end);
       a.pause();
     };
-  }, [playing, audioMap]);
+  }, [playing, audioMap, previewMap]);
 
   const onUpload = async (tid, file) => {
     if (!file) return;
