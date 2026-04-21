@@ -630,13 +630,15 @@ function SavedSetsList({ savedSets, currentSet, activeSetId, viewingSetId, onSav
 
 function CratesPage({ crates, records, activeCrateId, setActiveCrateId, onSelect,
                      onDeleteCrate, onRemoveFromCrate, onNewCrate,
-                     onAddToSet, inSet, density, showOverlays, onBrowseCollection }) {
+                     onAddToSet, inSet, density, showOverlays, sortBy, onBrowseCollection }) {
   const activeCrate = crates.find(c => c.id === activeCrateId);
 
   if (activeCrate) {
-    const crateRecords = activeCrate.recordIds
-      .map(id => records.find(r => r.id === id))
-      .filter(Boolean);
+    const crateRecords = window.sortRecords(
+      activeCrate.recordIds
+        .map(id => records.find(r => r.id === id))
+        .filter(Boolean),
+      sortBy);
     return (
       <div>
         <div style={{

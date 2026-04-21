@@ -410,6 +410,9 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     onlyInSet: advFilters.onlyInSet, set,
   });
   const availableGenres = ['All', ...new Set(records.map(r => r.genre).filter(Boolean))].sort();
+  const [sortBy, setSortBy] = React.useState(() => localStorage.getItem('cs-sort') || 'recent');
+  React.useEffect(() => { localStorage.setItem('cs-sort', sortBy); }, [sortBy]);
+  const sortedFiltered = sortRecords(filtered, sortBy);
 
   if (isPhone) {
     return (
@@ -461,6 +464,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           advFilters={advFilters} setAdvFilters={setAdvFilters}
           records={records}
           count={filtered.length} total={records.length}
+          sortBy={sortBy} setSortBy={setSortBy}
           density={tweaks.density} setDensity={d => setTweaks({ ...tweaks, density: d })} />
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px 80px' }}>
@@ -470,13 +474,13 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
                 onOpenImport={() => setImportOpen(true)} />
             ) : (
               <>
-                {viewStyle === 'grid' && <CollectionGrid records={filtered} onSelect={setSelected}
+                {viewStyle === 'grid' && <CollectionGrid records={sortedFiltered} onSelect={setSelected}
                   onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
                   showOverlays={tweaks.showOverlays} />}
-                {viewStyle === 'list' && <CollectionList records={filtered} onSelect={setSelected}
+                {viewStyle === 'list' && <CollectionList records={sortedFiltered} onSelect={setSelected}
                   onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
                   showOverlays={tweaks.showOverlays} />}
-                {viewStyle === 'stack' && <CollectionStack records={filtered} onSelect={setSelected}
+                {viewStyle === 'stack' && <CollectionStack records={sortedFiltered} onSelect={setSelected}
                   onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
                   showOverlays={tweaks.showOverlays} />}
               </>
@@ -511,6 +515,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               onNewCrate={newCrate}
               onAddToSet={toggleAllTracks} inSet={recordInSet}
               density={tweaks.density} showOverlays={tweaks.showOverlays}
+              sortBy={sortBy}
               onBrowseCollection={() => setView('collection')} />
           )}
           {view === 'sets' && (
@@ -817,7 +822,90 @@ function ApiStatus({ label, ok }) {
   );
 }
 
-function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter, setGenreFilter, availableGenres, advFilters, setAdvFilters, records, count, total, density, setDensity }) {
+// ─── Sort helper — shared by collection + crates ──────────────────────
+function sortRecords(records, sortBy) {
+  if (!sortBy || sortBy === 'recent') return records;
+  const clone = [...records];
+  const cmpStr = (a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' });
+  const avgBpm = (r) => {
+    const bs = (r.tracks || []).map(t => t.bpm).filter(b => b != null);
+    return bs.length ? bs.reduce((s, x) => s + x, 0) / bs.length : (r.bpm ?? 0);
+  };
+  const avgRating = (r) => {
+    const rs = (r.tracks || []).map(t => t.rating || 0);
+    return rs.length ? rs.reduce((s, x) => s + x, 0) / rs.length : 0;
+  };
+  switch (sortBy) {
+    case 'title':  clone.sort((a, b) => cmpStr(a.title, b.title)); break;
+    case 'artist': clone.sort((a, b) => cmpStr(a.artist, b.artist) || cmpStr(a.title, b.title)); break;
+    case 'album':  clone.sort((a, b) => cmpStr(a.title, b.title)); break; // record title == album
+    case 'bpm':    clone.sort((a, b) => avgBpm(a) - avgBpm(b)); break;
+    case 'rating': clone.sort((a, b) => avgRating(b) - avgRating(a)); break;
+    case 'year':   clone.sort((a, b) => (a.year || 0) - (b.year || 0)); break;
+    default: break;
+  }
+  return clone;
+}
+Object.assign(window, { sortRecords });
+
+// Small dropdown control
+function SortDropdown({ sortBy, setSortBy }) {
+  const [open, setOpen] = React.useState(false);
+  const options = [
+    { id: 'recent', label: 'Recently added' },
+    { id: 'title',  label: 'Title (A–Z)' },
+    { id: 'artist', label: 'Artist (A–Z)' },
+    { id: 'album',  label: 'Album (A–Z)' },
+    { id: 'bpm',    label: 'BPM (low → high)' },
+    { id: 'rating', label: 'Rating (high → low)' },
+    { id: 'year',   label: 'Year (old → new)' },
+  ];
+  const current = options.find(o => o.id === sortBy) || options[0];
+  return (
+    <div style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+        borderRadius: 6, background: 'var(--hover)', border: '1px solid var(--border)',
+        color: 'var(--fg)', fontFamily: 'inherit', fontSize: 12, fontWeight: 500, cursor: 'pointer',
+      }}>
+        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+          letterSpacing: 1, color: 'var(--dim)', textTransform: 'uppercase' }}>Sort</span>
+        <span>{current.label}</span>
+        <span style={{ color: 'var(--dim)', fontSize: 9 }}>▾</span>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{
+            position: 'fixed', inset: 0, zIndex: 10,
+          }} />
+          <div style={{
+            position: 'absolute', top: '100%', right: 0, marginTop: 4,
+            background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8,
+            zIndex: 11, minWidth: 200, overflow: 'hidden',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+          }}>
+            {options.map(o => (
+              <button key={o.id} onClick={() => { setSortBy(o.id); setOpen(false); }} style={{
+                width: '100%', padding: '9px 12px', textAlign: 'left',
+                background: sortBy === o.id ? 'var(--hover)' : 'transparent',
+                border: 'none', color: 'var(--fg)', fontFamily: 'inherit',
+                fontSize: 12, fontWeight: sortBy === o.id ? 700 : 500, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: 3,
+                  background: sortBy === o.id ? 'var(--accent)' : 'transparent',
+                  border: sortBy === o.id ? 'none' : '1px solid var(--border)' }} />
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter, setGenreFilter, availableGenres, advFilters, setAdvFilters, records, count, total, sortBy, setSortBy, density, setDensity }) {
   return (
     <div style={{
       padding: '20px 32px 14px', borderBottom: '1px solid var(--border)',
@@ -877,6 +965,9 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
 
             {/* Advanced filter popover */}
             <FilterPopover filters={advFilters} setFilters={setAdvFilters} records={records} />
+
+            {/* Sort */}
+            <SortDropdown sortBy={sortBy} setSortBy={setSortBy} />
 
             {/* View style */}
             <div style={{ display: 'flex', gap: 4, border: '1px solid var(--border)', borderRadius: 6, padding: 3 }}>
