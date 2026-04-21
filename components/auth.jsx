@@ -2,6 +2,7 @@
 
 const SUPABASE_URL = 'https://iqnqwweukbcjgyspqbyg.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlxbnF3d2V1a2Jjamd5c3BxYnlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MTk2OTUsImV4cCI6MjA5MjI5NTY5NX0.pMXw1RAOF-PPQ-6iMW22gfIQiIPJfFtnYozrkyJ-2QQ';
+window.SUPABASE_ANON_KEY = SUPABASE_ANON_KEY;
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },

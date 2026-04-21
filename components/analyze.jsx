@@ -200,7 +200,8 @@ async function lookupGetSongBpm(artist, title, _ignoredKey) {
   // Call our Supabase edge function (has CORS + stores the real API key server-side).
   const base = 'https://iqnqwweukbcjgyspqbyg.supabase.co/functions/v1/bpm-lookup';
   const url = `${base}?lookup=${encodeURIComponent(lookup)}`;
-  const res = await fetch(url);
+  const anon = window.SUPABASE_ANON_KEY;
+  const res = await fetch(url, anon ? { headers: { apikey: anon, authorization: `Bearer ${anon}` } } : {});
   if (!res.ok) return null;
   const data = await res.json();
   const hit = Array.isArray(data.search) ? data.search[0] : null;
