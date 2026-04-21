@@ -20,13 +20,13 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   const [set, setSet] = React.useState(() => {
     const saved = localStorage.getItem('cs-set');
     if (saved) { try { return JSON.parse(saved); } catch {} }
-    return ['r02-0', 'r02-1', 'r04-0', 'r06-2', 'r12-0', 'r09-3'];
+    return [];
   });
   // Records are persisted too, so Discogs imports and manual edits survive reloads
   const [records, setRecords] = React.useState(() => {
     const saved = localStorage.getItem('cs-records');
     if (saved) { try { return JSON.parse(saved); } catch {} }
-    return window.RECORDS;
+    return [];
   });
   const [search, setSearch] = React.useState('');
   const [genreFilter, setGenreFilter] = React.useState('All');
@@ -401,17 +401,22 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px 80px' }}>
           {view === 'collection' && (
-            <>
-              {viewStyle === 'grid' && <CollectionGrid records={filtered} onSelect={setSelected}
-                onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
-                showOverlays={tweaks.showOverlays} />}
-              {viewStyle === 'list' && <CollectionList records={filtered} onSelect={setSelected}
-                onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
-                showOverlays={tweaks.showOverlays} />}
-              {viewStyle === 'stack' && <CollectionStack records={filtered} onSelect={setSelected}
-                onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
-                showOverlays={tweaks.showOverlays} />}
-            </>
+            records.length === 0 ? (
+              <EmptyCollection onAddRecord={openNewRecord}
+                onOpenImport={() => setImportOpen(true)} />
+            ) : (
+              <>
+                {viewStyle === 'grid' && <CollectionGrid records={filtered} onSelect={setSelected}
+                  onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
+                  showOverlays={tweaks.showOverlays} />}
+                {viewStyle === 'list' && <CollectionList records={filtered} onSelect={setSelected}
+                  onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
+                  showOverlays={tweaks.showOverlays} />}
+                {viewStyle === 'stack' && <CollectionStack records={filtered} onSelect={setSelected}
+                  onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
+                  showOverlays={tweaks.showOverlays} />}
+              </>
+            )
           )}
           {view === 'set' && (
             <SetBuilder set={set} records={records}
@@ -846,6 +851,46 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function EmptyCollection({ onAddRecord, onOpenImport }) {
+  return (
+    <div style={{
+      maxWidth: 520, margin: '60px auto 0', padding: 36, textAlign: 'center',
+      borderRadius: 16, border: '1px dashed var(--border)',
+    }}>
+      <div style={{
+        width: 64, height: 64, borderRadius: 32, margin: '0 auto 18px',
+        background: 'var(--accent)', color: 'var(--on-accent)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+        </svg>
+      </div>
+      <h2 style={{ margin: '0 0 6px', fontSize: 24, fontWeight: 700, letterSpacing: -0.4 }}>
+        Your shelves are empty
+      </h2>
+      <p style={{ margin: '0 0 22px', color: 'var(--dim)', fontSize: 13, lineHeight: 1.5 }}>
+        Add your first record manually, or pull your collection straight from Discogs.
+      </p>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button onClick={onAddRecord} style={{
+          padding: '10px 18px', borderRadius: 8, border: 'none',
+          background: 'var(--accent)', color: 'var(--on-accent)',
+          fontSize: 12, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase',
+          fontFamily: 'inherit', cursor: 'pointer',
+        }}>Add your first record</button>
+        <button onClick={onOpenImport} style={{
+          padding: '10px 18px', borderRadius: 8,
+          background: 'transparent', color: 'var(--fg)',
+          border: '1px solid var(--border)',
+          fontSize: 12, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase',
+          fontFamily: 'inherit', cursor: 'pointer',
+        }}>Import from Discogs</button>
+      </div>
     </div>
   );
 }

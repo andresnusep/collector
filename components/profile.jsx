@@ -149,16 +149,16 @@ function ProfilePage({ profile, setProfile, records, savedSets }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 28 }}>
         <PhotoField profile={profile} onChange={onPhotoChange}
           onRemove={() => update({ photo: '' })} />
-        <Field label="Name"
+        <ProfileField label="Name"
           value={profile.name} onChange={v => update({ name: v })}
           placeholder="Your legal name" />
-        <Field label="DJ name"
+        <ProfileField label="DJ name"
           value={profile.djName} onChange={v => update({ djName: v })}
           placeholder="Stage name" />
-        <Field label="Location"
+        <ProfileField label="Location"
           value={profile.location} onChange={v => update({ location: v })}
           placeholder="City, Country" />
-        <Field label="Bio" multiline
+        <ProfileField label="Bio" multiline
           value={profile.bio} onChange={v => update({ bio: v })}
           placeholder="A few lines about your sound" />
       </div>
@@ -209,16 +209,16 @@ function ProfilePage({ profile, setProfile, records, savedSets }) {
       {/* Links */}
       <SectionLabel>Links</SectionLabel>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <Field label="Instagram"
+        <ProfileField label="Instagram"
           value={profile.links.instagram} onChange={v => updateLink('instagram', v)}
           placeholder="@handle or full URL" />
-        <Field label="SoundCloud"
+        <ProfileField label="SoundCloud"
           value={profile.links.soundcloud} onChange={v => updateLink('soundcloud', v)}
           placeholder="soundcloud.com/yourname" />
-        <Field label="Resident Advisor"
+        <ProfileField label="Resident Advisor"
           value={profile.links.residentadvisor} onChange={v => updateLink('residentadvisor', v)}
           placeholder="ra.co/dj/yourname" />
-        <Field label="Website"
+        <ProfileField label="Website"
           value={profile.links.website} onChange={v => updateLink('website', v)}
           placeholder="https://…" />
       </div>
@@ -253,7 +253,7 @@ function StatCard({ label, value }) {
   );
 }
 
-function Field({ label, value, onChange, placeholder, multiline }) {
+function ProfileField({ label, value, onChange, placeholder, multiline }) {
   const common = {
     width: '100%', padding: '10px 12px', borderRadius: 8,
     background: 'var(--hover)', border: '1px solid var(--border)',
