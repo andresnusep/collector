@@ -32,6 +32,18 @@ Deno.serve(async (req) => {
   try {
     const res = await fetch(upstream);
     const body = await res.text();
+    const ct = res.headers.get('content-type') || '';
+    // GetSongBPM returns HTML on errors (e.g. 403 unverified). Normalize to JSON.
+    if (!ct.includes('application/json')) {
+      return new Response(JSON.stringify({
+        error: 'upstream_non_json',
+        status: res.status,
+        snippet: body.slice(0, 200),
+      }), {
+        status: res.status,
+        headers: { ...CORS, 'content-type': 'application/json' },
+      });
+    }
     return new Response(body, {
       status: res.status,
       headers: { ...CORS, 'content-type': 'application/json' },
