@@ -1,8 +1,11 @@
 // GetSongBPM integration — fills in missing BPM/key per track.
 // Free API, requires attribution (shown in modal). Get a key at https://getsongbpm.com/api
 
+const GSBPM_DEFAULT_KEY = '92947fe415c8cddf9b400174476de981';
+
 function AnalyzeModal({ open, records, onClose, onApply }) {
-  const [apiKey, setApiKey] = React.useState(() => localStorage.getItem('cs-gsbpm-key') || '');
+  const [apiKey, setApiKey] = React.useState(() =>
+    localStorage.getItem('cs-gsbpm-key') || GSBPM_DEFAULT_KEY);
   const [busy, setBusy] = React.useState(false);
   const [progress, setProgress] = React.useState({ done: 0, total: 0, hits: 0 });
   const [error, setError] = React.useState('');
