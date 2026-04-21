@@ -225,6 +225,21 @@ function parseDiscogsTracklist(full, rec) {
     }));
 }
 
+function parseDiscogsRpm(formats) {
+  // formats[].descriptions contains strings like "33 ⅓ RPM" / "45 RPM" / "78 RPM".
+  // Numbers may be spelled out or use fractions ("⅓"). Also "33 1/3".
+  for (const f of formats || []) {
+    for (const d of f.descriptions || []) {
+      const s = String(d).toLowerCase();
+      if (!/rpm/.test(s)) continue;
+      if (/78/.test(s)) return 78;
+      if (/45/.test(s)) return 45;
+      if (/33/.test(s)) return 33;
+    }
+  }
+  return null; // unknown — caller defaults to 33
+}
+
 function mapDiscogsRelease(rel) {
   const info = rel.basic_information;
   if (!info) return null;
@@ -233,6 +248,7 @@ function mapDiscogsRelease(rel) {
   const label = info.labels?.[0]?.name || '';
   const catalog = info.labels?.[0]?.catno || '';
   const genre = info.genres?.[0] || info.styles?.[0] || 'Unknown';
+  const rpm = parseDiscogsRpm(info.formats) || 33;
   const coverImage = (info.cover_image && !info.cover_image.includes('spacer.gif'))
     ? info.cover_image : null;
 
@@ -250,7 +266,7 @@ function mapDiscogsRelease(rel) {
     year: info.year || null,
     label, catalog,
     genre, mood: '', energy: 5,
-    bpm: null, key: null,
+    bpm: null, key: null, rpm,
     cover: { hue, shape, image: coverImage },
     notes: '',
     value: 0,
