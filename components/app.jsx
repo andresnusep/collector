@@ -326,6 +326,57 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     if (!hydrated) return;
     upsertWorkspaceDebounced({ set, activeSetId, currentSetName });
   }, [set, activeSetId, currentSetName, hydrated]);
+
+  // Auto-analyze: quietly fill BPM/key for any track that's missing them.
+  // Runs in background, throttled, marks tracks as `bpmTried` so we never retry the same miss.
+  const autoAnalyzeRunning = React.useRef(false);
+  React.useEffect(() => {
+    if (!hydrated || autoAnalyzeRunning.current) return;
+    const targets = [];
+    for (const r of records) {
+      for (let i = 0; i < r.tracks.length; i++) {
+        const t = r.tracks[i];
+        const missing = t.bpm == null || t.key == null || t.key === '';
+        if (missing && !t.bpmTried) {
+          targets.push({ rid: r.id, idx: i, artist: r.artist, title: t.title || r.title });
+        }
+      }
+    }
+    if (targets.length === 0) return;
+
+    autoAnalyzeRunning.current = true;
+    let cancelled = false;
+    (async () => {
+      const apiKey = localStorage.getItem('cs-gsbpm-key') || '92947fe415c8cddf9b400174476de981';
+      const results = {};
+      for (const t of targets) {
+        if (cancelled) break;
+        try {
+          const r = await window.lookupGetSongBpm(t.artist, t.title, apiKey);
+          (results[t.rid] ||= []).push({ trackIndex: t.idx, ...(r || {}) });
+        } catch {
+          (results[t.rid] ||= []).push({ trackIndex: t.idx });
+        }
+        await new Promise(res => setTimeout(res, 250)); // throttle
+      }
+      if (cancelled) return;
+      setRecords(cur => cur.map(rec => {
+        const ups = results[rec.id];
+        if (!ups?.length) return rec;
+        const tracks = rec.tracks.map((t, i) => {
+          const u = ups.find(x => x.trackIndex === i);
+          if (!u) return t;
+          return { ...t, bpm: u.bpm ?? t.bpm, key: u.key ?? t.key, bpmTried: true };
+        });
+        const bpms = tracks.map(t => t.bpm).filter(b => b != null);
+        const avgBpm = bpms.length ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) : rec.bpm;
+        const firstKey = tracks.find(t => t.key)?.key || rec.key;
+        return { ...rec, tracks, bpm: rec.bpm ?? avgBpm, key: rec.key || firstKey };
+      }));
+      autoAnalyzeRunning.current = false;
+    })();
+    return () => { cancelled = true; autoAnalyzeRunning.current = false; };
+  }, [records, hydrated]);
   const isTrackInSet = (tid) => set.includes(tid);
   // Record has "some" track in set
   const recordInSet = (rid) => {
@@ -677,18 +728,6 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--fg)'; }}>
         {Icon.Discogs}
         <span style={{ flex: 1 }}>Import from Discogs</span>
-      </button>
-      <button onClick={onAnalyze} style={{
-        marginBottom: 10, padding: '10px 12px',
-        background: 'transparent', color: 'var(--fg)',
-        border: '1px dashed var(--border)', borderRadius: 8,
-        cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-        display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--fg)'; }}>
-        <span style={{ fontSize: 14 }}>♫</span>
-        <span style={{ flex: 1 }}>Match BPM &amp; key</span>
       </button>
 
       {/* Collection stats */}
