@@ -630,15 +630,30 @@ function SavedSetsList({ savedSets, currentSet, activeSetId, viewingSetId, onSav
 
 function CratesPage({ crates, records, activeCrateId, setActiveCrateId, onSelect,
                      onDeleteCrate, onRemoveFromCrate, onNewCrate,
-                     onAddToSet, inSet, density, showOverlays, sortBy, onBrowseCollection }) {
+                     onAddToSet, inSet, density, showOverlays,
+                     sortBy, search, viewStyle, advFilters, set,
+                     onBrowseCollection }) {
   const activeCrate = crates.find(c => c.id === activeCrateId);
 
   if (activeCrate) {
-    const crateRecords = window.sortRecords(
-      activeCrate.recordIds
-        .map(id => records.find(r => r.id === id))
-        .filter(Boolean),
-      sortBy);
+    const rawCrateRecords = activeCrate.recordIds
+      .map(id => records.find(r => r.id === id))
+      .filter(Boolean);
+    // Apply the global search + advanced filters inside the crate
+    const filtered = window.applyFilters
+      ? window.applyFilters(rawCrateRecords, {
+          search: search || '',
+          genre: 'All',
+          key: advFilters?.key || 'All',
+          bpmMin: advFilters?.bpmMin ?? null,
+          bpmMax: advFilters?.bpmMax ?? null,
+          yearMin: advFilters?.yearMin ?? null,
+          yearMax: advFilters?.yearMax ?? null,
+          onlyInSet: advFilters?.onlyInSet ?? false,
+          set: set || [],
+        })
+      : rawCrateRecords;
+    const crateRecords = window.sortRecords(filtered, sortBy);
     return (
       <div>
         <div style={{
@@ -696,18 +711,23 @@ function CratesPage({ crates, records, activeCrateId, setActiveCrateId, onSelect
             }}>Browse collection</button>
           </div>
         ) : (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: `repeat(auto-fill, minmax(${density === 'compact' ? 170 : 210}px, 1fr))`,
-            gap: density === 'compact' ? 16 : 24,
-          }}>
-            {crateRecords.map(r => (
-              <CrateRecordCard key={r.id} record={r} crate={activeCrate}
-                onSelect={onSelect} onRemove={() => onRemoveFromCrate(activeCrate.id, r.id)}
-                onAddToSet={onAddToSet} inSet={inSet(r.id)}
-                density={density} showOverlays={showOverlays} />
-            ))}
-          </div>
+          <>
+            {(!viewStyle || viewStyle === 'grid') && (
+              <CollectionGrid records={crateRecords} onSelect={onSelect}
+                onAddToSet={onAddToSet} inSet={inSet} density={density}
+                showOverlays={showOverlays} />
+            )}
+            {viewStyle === 'list' && (
+              <CollectionList records={crateRecords} onSelect={onSelect}
+                onAddToSet={onAddToSet} inSet={inSet} density={density}
+                showOverlays={showOverlays} />
+            )}
+            {viewStyle === 'stack' && (
+              <CollectionStack records={crateRecords} onSelect={onSelect}
+                onAddToSet={onAddToSet} inSet={inSet} density={density}
+                showOverlays={showOverlays} />
+            )}
+          </>
         )}
       </div>
     );

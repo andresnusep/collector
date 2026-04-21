@@ -465,6 +465,8 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           records={records}
           count={filtered.length} total={records.length}
           sortBy={sortBy} setSortBy={setSortBy}
+          activeCrateName={view === 'crates' && activeCrateId
+            ? crates.find(c => c.id === activeCrateId)?.name : null}
           density={tweaks.density} setDensity={d => setTweaks({ ...tweaks, density: d })} />
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px 80px' }}>
@@ -516,6 +518,9 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               onAddToSet={toggleAllTracks} inSet={recordInSet}
               density={tweaks.density} showOverlays={tweaks.showOverlays}
               sortBy={sortBy}
+              search={search}
+              viewStyle={viewStyle}
+              advFilters={advFilters} set={set}
               onBrowseCollection={() => setView('collection')} />
           )}
           {view === 'sets' && (
@@ -905,7 +910,8 @@ function SortDropdown({ sortBy, setSortBy }) {
   );
 }
 
-function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter, setGenreFilter, availableGenres, advFilters, setAdvFilters, records, count, total, sortBy, setSortBy, density, setDensity }) {
+function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter, setGenreFilter, availableGenres, advFilters, setAdvFilters, records, count, total, sortBy, setSortBy, activeCrateName, density, setDensity }) {
+  const showToolbar = view === 'collection' || (view === 'crates' && activeCrateName);
   return (
     <div style={{
       padding: '20px 32px 14px', borderBottom: '1px solid var(--border)',
@@ -927,7 +933,9 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
             margin: 0, fontSize: 44, fontWeight: 800, letterSpacing: -1.6, lineHeight: 1,
           }}>
             {view === 'collection' && <>Collection<span style={{ color: 'var(--accent)' }}>.</span></>}
-            {view === 'crates' && <>Crates<span style={{ color: 'var(--accent)' }}>.</span></>}
+            {view === 'crates' && (activeCrateName
+              ? <>{activeCrateName}<span style={{ color: 'var(--accent)' }}>.</span></>
+              : <>Crates<span style={{ color: 'var(--accent)' }}>.</span></>)}
             {view === 'set' && <>Set builder<span style={{ color: 'var(--accent)' }}>.</span></>}
             {view === 'sets' && <>Your sets<span style={{ color: 'var(--accent)' }}>.</span></>}
             {view === 'dashboard' && <>Dashboard<span style={{ color: 'var(--accent)' }}>.</span></>}
@@ -945,7 +953,7 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
         </div>
       </div>
 
-      {view === 'collection' && (
+      {showToolbar && (
         <>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {/* Search */}
