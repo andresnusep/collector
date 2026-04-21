@@ -123,6 +123,7 @@
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
 <script src="data/records.js"></script>
 <script src="data/audio-store.js"></script>
@@ -139,6 +140,7 @@
 <script type="text/babel" src="components/advanced.jsx"></script>
 <script type="text/babel" src="components/more.jsx"></script>
 <script type="text/babel" src="components/profile.jsx"></script>
+<script type="text/babel" src="components/auth.jsx"></script>
 <script type="text/babel" src="components/app.jsx"></script>
 
 <script>
@@ -167,6 +169,26 @@ function Root() {
     return TWEAK_DEFAULTS;
   });
   const [editMode, setEditMode] = React.useState(false);
+  const session = useSession();
+
+  // Namespace localStorage per user so friends share a browser without clobbering each other.
+  React.useEffect(() => {
+    const userId = session?.user?.id || null;
+    if (window.__csUserId === userId) return;
+    window.__csUserId = userId;
+    const ns = userId ? `cs-u-${userId}-` : 'cs-';
+    const origGet = Storage.prototype.__origGet || localStorage.getItem.bind(localStorage);
+    const origSet = Storage.prototype.__origSet || localStorage.setItem.bind(localStorage);
+    const origDel = Storage.prototype.__origDel || localStorage.removeItem.bind(localStorage);
+    Storage.prototype.__origGet = origGet;
+    Storage.prototype.__origSet = origSet;
+    Storage.prototype.__origDel = origDel;
+    const keys = ['cs-set', 'cs-records', 'cs-crates', 'cs-saved-sets',
+      'cs-current-name', 'cs-profile'];
+    localStorage.getItem = (k) => keys.includes(k) ? origGet(ns + k) : origGet(k);
+    localStorage.setItem = (k, v) => keys.includes(k) ? origSet(ns + k, v) : origSet(k, v);
+    localStorage.removeItem = (k) => keys.includes(k) ? origDel(ns + k) : origDel(k);
+  }, [session?.user?.id]);
 
   React.useEffect(() => {
     localStorage.setItem('cs-tweaks', JSON.stringify(tweaks));
@@ -190,9 +212,24 @@ function Root() {
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits: patch }, '*');
   };
 
+  if (session === undefined) {
+    return (
+      <div className={`app ${tweaks.theme}`} style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', background: 'var(--bg)', color: 'var(--dim)',
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: 1.5,
+        textTransform: 'uppercase',
+      }}>Loading…</div>
+    );
+  }
+  if (!session) {
+    return <SignInScreen tweaks={tweaks} />;
+  }
+
   return (
     <>
-      <CollectorStudio tweaks={tweaks} setTweaks={setTweaks} />
+      <CollectorStudio key={session.user.id} tweaks={tweaks} setTweaks={setTweaks}
+        user={session.user} onSignOut={signOut} />
       {editMode && (
         <div className="tweaks-panel open">
           <div className="tweaks-header">

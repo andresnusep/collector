@@ -2,7 +2,7 @@
 
 function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrentSetName,
                      onSaveSet, onToggleTrack, onRemoveFromSet, onClearSet, onLoadSavedSet,
-                     profile, setProfile,
+                     profile, setProfile, user, onSignOut,
                      darkMode, accent }) {
   const [tab, setTab] = React.useState('now');
   const [nowIdx, setNowIdx] = React.useState(0);
@@ -86,6 +86,19 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 20px' }}>
             <ProfilePage profile={profile} setProfile={setProfile}
               records={records} savedSets={savedSets || []} />
+            {onSignOut && (
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${border}` }}>
+                <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 6 }}>
+                  {user?.email}
+                </div>
+                <button onClick={() => { if (confirm('Sign out?')) onSignOut(); }} style={{
+                  width: '100%', padding: 10, borderRadius: 8,
+                  background: 'transparent', border: `1px solid ${border}`,
+                  color: fg, fontFamily: 'inherit',
+                  fontSize: 12, fontWeight: 700, letterSpacing: 0.5, cursor: 'pointer',
+                }}>Sign out</button>
+              </div>
+            )}
           </div>
         </div>
       )}

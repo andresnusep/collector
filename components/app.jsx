@@ -1,6 +1,6 @@
 // Main app shell
 
-function CollectorStudio({ tweaks, setTweaks }) {
+function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   const [isPhone, setIsPhone] = React.useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches);
   React.useEffect(() => {
@@ -44,7 +44,14 @@ function CollectorStudio({ tweaks, setTweaks }) {
   const [profile, setProfile] = React.useState(() => {
     const saved = localStorage.getItem('cs-profile');
     if (saved) { try { return window.migrateProfile(JSON.parse(saved)); } catch {} }
-    return window.migrateProfile(null);
+    const seed = window.migrateProfile(null);
+    if (user) {
+      seed.id = user.id;
+      seed.name = user.user_metadata?.full_name || '';
+      const avatar = user.user_metadata?.avatar_url || user.user_metadata?.picture;
+      if (avatar) seed.photo = avatar;
+    }
+    return seed;
   });
   React.useEffect(() => { localStorage.setItem('cs-profile', JSON.stringify(profile)); }, [profile]);
 
@@ -245,6 +252,7 @@ function CollectorStudio({ tweaks, setTweaks }) {
           onClearSet={() => setSet([])}
           onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
           profile={profile} setProfile={setProfile}
+          user={user} onSignOut={onSignOut}
           darkMode={tweaks.theme === 'dark'} accent={ACCENTS[tweaks.accent] || tweaks.accent} />
       </div>
     );
@@ -268,7 +276,7 @@ function CollectorStudio({ tweaks, setTweaks }) {
         onNewCrate={newCrate} onDeleteCrate={deleteCrate}
         savedSets={savedSets} activeSetId={activeSetId} viewingSetId={viewingSetId}
         onSaveSet={saveCurrentSet} onOpenSet={openSavedSet} onDeleteSet={deleteSavedSet}
-        profile={profile} />
+        profile={profile} user={user} onSignOut={onSignOut} />
 
       {/* Main */}
       <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -425,7 +433,7 @@ function CollectorStudio({ tweaks, setTweaks }) {
   );
 }
 
-function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile }) {
+function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile, user, onSignOut }) {
   const stats = {
     total: records.length,
     genres: new Set(records.map(r => r.genre)).size,
@@ -452,25 +460,46 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
       </div>
 
       {/* Profile chip */}
-      <button onClick={() => setView('profile')} style={{
-        display: 'flex', alignItems: 'center', gap: 10,
-        padding: '8px 10px', marginBottom: 20, borderRadius: 10,
-        background: view === 'profile' ? 'var(--hover)' : 'transparent',
-        border: '1px solid var(--border)',
-        color: 'var(--fg)', fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20,
       }}>
-        <ProfileAvatar profile={profile} size={34} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {profile.djName || profile.name || 'Set up profile'}
+        <button onClick={() => setView('profile')} style={{
+          flex: 1, display: 'flex', alignItems: 'center', gap: 10,
+          padding: '8px 10px', borderRadius: 10,
+          background: view === 'profile' ? 'var(--hover)' : 'transparent',
+          border: '1px solid var(--border)',
+          color: 'var(--fg)', fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+          minWidth: 0,
+        }}>
+          <ProfileAvatar profile={profile} size={34} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 700,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {profile.djName || profile.name || 'Set up profile'}
+            </div>
+            <div style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 0.5,
+              color: 'var(--dim)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{user?.email || 'Edit your profile'}</div>
           </div>
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1,
-            textTransform: 'uppercase', color: 'var(--dim)',
-          }}>{profile.djName && profile.name ? profile.name : 'Edit your profile'}</div>
-        </div>
-      </button>
+        </button>
+        {onSignOut && (
+          <button onClick={() => { if (confirm('Sign out?')) onSignOut(); }}
+            title="Sign out" style={{
+              width: 36, height: 36, borderRadius: 10,
+              border: '1px solid var(--border)', background: 'transparent',
+              color: 'var(--dim)', cursor: 'pointer', flexShrink: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
+        )}
+      </div>
 
       <div style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
