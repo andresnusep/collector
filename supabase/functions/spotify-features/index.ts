@@ -101,9 +101,16 @@ async function getSongBpmLookup(artist, title) {
   const lookup = "song:" + title + "+artist:" + artist;
   const url = "https://api.getsongbpm.com/search/?api_key=" +
     encodeURIComponent(apiKey) + "&type=both&lookup=" + encodeURIComponent(lookup);
+  // Browser-like headers so Cloudflare doesn't bot-challenge us.
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://kollector.studio/",
+  };
   let res;
   try {
-    res = await fetch(url);
+    res = await fetch(url, { headers: headers });
   } catch (e) {
     return { result: null, debug: { gs: "fetch-threw", err: String(e) } };
   }
