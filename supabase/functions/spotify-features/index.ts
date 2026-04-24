@@ -34,7 +34,8 @@ async function getAccessToken() {
     body: "grant_type=client_credentials",
   });
   if (!res.ok) {
-    throw new Error("spotify auth failed: " + res.status);
+    const body = await res.text();
+    throw new Error("spotify auth failed: " + res.status + " " + body.slice(0, 200));
   }
   const data = await res.json();
   cachedToken = {
