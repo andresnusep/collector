@@ -68,7 +68,7 @@ function SignInScreen({ tweaks }) {
       <div style={{ width: '100%', maxWidth: 360 }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1 }}>
-            Collector<br /><span style={{ color: 'var(--accent)' }}>Studio.</span>
+            Kollector<br /><span style={{ color: 'var(--accent)' }}>Studio.</span>
           </div>
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,

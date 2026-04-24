@@ -639,7 +639,7 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
         <div style={{
           fontSize: 22, fontWeight: 800, letterSpacing: -0.8, lineHeight: 0.95,
         }}>
-          Collector<br /><span style={{ color: 'var(--accent)' }}>Studio</span><span style={{ color: 'var(--accent)' }}>.</span>
+          Kollector<br /><span style={{ color: 'var(--accent)' }}>Studio</span><span style={{ color: 'var(--accent)' }}>.</span>
         </div>
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,

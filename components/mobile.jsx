@@ -54,7 +54,7 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
           textTransform: 'uppercase', opacity: 0.55,
-        }}>Collector Studio</div>
+        }}>Kollector Studio</div>
         {profile && (
           <ProfileAvatar profile={profile} size={32}
             onClick={() => setProfileOpen(true)} />
