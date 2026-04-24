@@ -198,6 +198,18 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     if (selected?.id === id) setSelected(null);
   };
 
+  // Refresh a single album from Discogs (authoritative tracklist, cover,
+  // label, catalog, RPM, genre). Preserves BPM/key/rating/notes.
+  const refreshDiscogsRecord = async (record) => {
+    const updated = await window.refreshDiscogsRecord(record);
+    setRecords(cur => cur.map(r => r.id === updated.id ? updated : r));
+    if (selected?.id === updated.id) setSelected(updated);
+    // Invalidate iTunes preview cache for this record so we re-match if
+    // the tracklist changed.
+    window.iTunesPreview?.clearPreviewCache?.(`${updated.id}-`);
+    return updated;
+  };
+
   React.useEffect(() => { setViewStyle(tweaks.viewStyle); }, [tweaks.viewStyle]);
   React.useEffect(() => { localStorage.setItem('cs-set', JSON.stringify(set)); }, [set]);
   React.useEffect(() => {
@@ -543,7 +555,8 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
             onEdit={() => openEditRecord(selected)}
             crates={crates} onAddToCrate={addToCrate} onRemoveFromCrate={removeFromCrate}
             onNewCrate={newCrate}
-            onRateTrack={rateTrack} />
+            onRateTrack={rateTrack}
+            onRefreshDiscogs={refreshDiscogsRecord} />
         )}
       </div>
 

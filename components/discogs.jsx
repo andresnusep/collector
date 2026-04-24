@@ -277,4 +277,70 @@ function mapDiscogsRelease(rel) {
   };
 }
 
-Object.assign(window, { DiscogsImportModal, fetchDiscogsCollection });
+// Refresh a single record from Discogs. Re-fetches /releases/:id and
+// merges authoritative label/catalog/tracklist/cover data back in,
+// preserving user-entered fields (BPM, key, rating, notes, mood, energy).
+async function refreshDiscogsRecord(record) {
+  if (!record?.discogsId) throw new Error('This record was not imported from Discogs.');
+  const token = localStorage.getItem('cs-discogs-token');
+  if (!token) throw new Error('Discogs token not found. Open Import once to save it.');
+  const headers = {
+    'Authorization': `Discogs token=${token}`,
+    'User-Agent': 'KollectorStudio/0.4',
+  };
+  const res = await fetchWithRetry(`https://api.discogs.com/releases/${record.discogsId}`, { headers });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error('Invalid Discogs token.');
+    if (res.status === 404) throw new Error('Release not found on Discogs.');
+    if (res.status === 429) throw new Error('Discogs rate limit hit — try again in a minute.');
+    throw new Error(`Discogs error: ${res.status}`);
+  }
+  const full = await res.json();
+  return mergeDiscogsIntoRecord(full, record);
+}
+
+function mergeDiscogsIntoRecord(full, existing) {
+  const artistNames = (full.artists || []).map(a => a.name.replace(/\s*\(\d+\)$/, '')).join(' & ')
+    || existing.artist;
+  const label = full.labels?.[0]?.name ?? existing.label;
+  const catalog = full.labels?.[0]?.catno ?? existing.catalog;
+  const genre = full.genres?.[0] || full.styles?.[0] || existing.genre;
+  const rpm = parseDiscogsRpm(full.formats) || existing.rpm || 33;
+  // /releases/:id returns images[] with uri; fall back to existing cover image.
+  const coverImage = (full.images?.find(i => i.type === 'primary')?.uri)
+    || full.images?.[0]?.uri
+    || existing.cover?.image
+    || null;
+
+  // Merge tracklist by index, preserving user-entered per-track data.
+  const newTracks = (full.tracklist || [])
+    .filter(t => !t.type_ || t.type_ === 'track')
+    .map((t, i) => {
+      const prev = existing.tracks?.[i] || {};
+      return {
+        n: t.position || prev.n || `A${i + 1}`,
+        title: t.title || prev.title || 'Untitled',
+        len: t.duration || prev.len || '0:00',
+        bpm: prev.bpm ?? null,
+        key: prev.key || '',
+        mood: prev.mood || '',
+        energy: prev.energy ?? 5,
+        rating: prev.rating ?? null,
+        bpmTried: false, // re-try auto BPM lookup since title may have changed
+      };
+    });
+
+  return {
+    ...existing,
+    artist: artistNames,
+    title: full.title || existing.title,
+    year: full.year || existing.year,
+    label, catalog, genre, rpm,
+    cover: { ...existing.cover, image: coverImage },
+    notes: existing.notes || full.notes || '',
+    tracks: newTracks.length ? newTracks : existing.tracks,
+    discogsRefreshedAt: Date.now(),
+  };
+}
+
+Object.assign(window, { DiscogsImportModal, fetchDiscogsCollection, refreshDiscogsRecord });

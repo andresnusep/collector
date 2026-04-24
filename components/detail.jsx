@@ -1,6 +1,6 @@
 // Record detail drawer — track-level add to set
 
-function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, onRateTrack }) {
+function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, onRateTrack, onRefreshDiscogs }) {
   const [playing, setPlaying] = React.useState(null);
   const [progress, setProgress] = React.useState({});
   const [audioMap, setAudioMap] = React.useState({}); // trackId -> object URL
@@ -166,9 +166,16 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
         )}
       </div>
 
-      <div style={{ padding: '0 20px 20px', display: 'flex', gap: 10 }}>
-        <ApiPill icon={Icon.Discogs} label="Discogs" status="Synced · 2d ago" color="oklch(0.7 0.04 80)" />
-      </div>
+      {record.source === 'discogs' && (
+        <div style={{ padding: '0 20px 20px', display: 'flex', gap: 10, alignItems: 'stretch' }}>
+          <ApiPill icon={Icon.Discogs} label="Discogs"
+            status={record.discogsRefreshedAt
+              ? `Refreshed · ${formatAgo(record.discogsRefreshedAt)}`
+              : 'Synced from import'}
+            color="oklch(0.7 0.04 80)" />
+          <DiscogsRefreshButton record={record} onRefresh={onRefreshDiscogs} />
+        </div>
+      )}
 
       {/* Tracklist — track-level add to set */}
       <div style={{ padding: '0 20px 20px' }}>
@@ -360,6 +367,57 @@ function ApiPill({ icon, label, status, color }) {
       </div>
     </div>
   );
+}
+
+function DiscogsRefreshButton({ record, onRefresh }) {
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+  const doRefresh = async () => {
+    if (busy || !onRefresh) return;
+    setBusy(true); setMsg('');
+    try {
+      await onRefresh(record);
+      setMsg('Updated');
+      setTimeout(() => setMsg(''), 2000);
+    } catch (e) {
+      setMsg(e.message || 'Failed');
+      setTimeout(() => setMsg(''), 4000);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button onClick={doRefresh} disabled={busy}
+      title={msg || 'Re-fetch this album from Discogs (preserves BPM/key/rating/notes)'}
+      style={{
+        padding: '0 14px', borderRadius: 8, border: '1px solid var(--border)',
+        background: 'transparent', color: 'var(--fg)', cursor: busy ? 'default' : 'pointer',
+        fontFamily: 'inherit', fontSize: 11, fontWeight: 600, letterSpacing: 0.3,
+        display: 'flex', alignItems: 'center', gap: 6,
+        opacity: busy ? 0.6 : 1, flexShrink: 0,
+      }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        style={{ animation: busy ? 'cs-spin 0.8s linear infinite' : 'none' }}>
+        <polyline points="23 4 23 10 17 10"/>
+        <polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      <style>{`@keyframes cs-spin { to { transform: rotate(360deg); } }`}</style>
+      {busy ? 'Refreshing…' : (msg || 'Refresh')}
+    </button>
+  );
+}
+
+function formatAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
 }
 
 function AudioUploadBtn({ trackId, hasAudio, onUpload, onClear }) {
