@@ -210,8 +210,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Nothing worked.
+    // Nothing worked. Debug-only: set DEBUG_BPM_LOOKUP=1 to echo the GetSongBPM
+    // failure reason back in the response. Off by default so we don't leak keys
+    // or odd upstream snippets to clients.
     const source = candidates.length ? "all:no-features" : "all:miss";
+    const debugOn = Deno.env.get("DEBUG_BPM_LOOKUP") === "1";
     return jsonResponse({
       bpm: null,
       key: null,
@@ -220,7 +223,7 @@ Deno.serve(async (req) => {
       mbid: candidates.length ? candidates[0].id : undefined,
       trackName: candidates.length ? candidates[0].title : undefined,
       trackArtist: candidates.length ? candidates[0].artist : undefined,
-      gsDebug: gs.debug,
+      gsDebug: debugOn ? gs.debug : undefined,
     });
   } catch (e) {
     return jsonResponse({ error: String(e && e.message ? e.message : e) }, 500);
