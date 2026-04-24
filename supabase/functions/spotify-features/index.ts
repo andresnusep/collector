@@ -6,7 +6,8 @@
 //
 // Client ID is public so hardcoded below.
 
-const SPOTIFY_CLIENT_ID = "cc00d64070b54dd5875b94a7500116f5";
+// Read from env so we don't hardcode it anywhere.
+const SPOTIFY_CLIENT_ID = Deno.env.get("SPOTIFY_CLIENT_ID") || "";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -22,6 +23,7 @@ async function getAccessToken() {
     return cachedToken.token;
   }
   const secret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
+  if (!SPOTIFY_CLIENT_ID) throw new Error("server missing SPOTIFY_CLIENT_ID");
   if (!secret) throw new Error("server missing SPOTIFY_CLIENT_SECRET");
 
   const basic = btoa(SPOTIFY_CLIENT_ID + ":" + secret);
