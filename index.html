@@ -118,11 +118,27 @@
 </head>
 <body>
 <noscript style="position:fixed;inset:0;padding:20px;background:#0E0C0A;color:#F4EFE6;font-family:sans-serif">
-  Kollector Studio requires JavaScript. BPM and musical-key data powered by
-  the Spotify Web API. Catalog data from Discogs. Previews from iTunes.
+  Kollector Studio requires JavaScript. BPM and musical-key data via
+  <a href="https://acousticbrainz.org" style="color:#F4EFE6">AcousticBrainz</a> and
+  <a href="https://getsongbpm.com" style="color:#F4EFE6">GetSongBPM</a>.
+  Catalog data from Discogs. Previews from iTunes.
 </noscript>
 
 <div id="root"></div>
+
+<!-- Static attribution for API backlink verification. GetSongBPM (and similar
+     services) scan the raw HTML of the registered domain for a backlink to
+     their site before activating the API key. Because the in-app attribution
+     is rendered by React, it's invisible to non-JS verifier crawlers. This
+     bottom-right pinned footer keeps the link in initial HTML source. -->
+<footer style="position:fixed;bottom:6px;right:10px;
+    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.4px;
+    color:#6b6763;background:transparent;z-index:1">
+  BPM &amp; key via
+  <a href="https://acousticbrainz.org" rel="noopener" style="color:#A88B5C;text-decoration:none">AcousticBrainz</a>
+  &amp;
+  <a href="https://getsongbpm.com" rel="noopener" style="color:#A88B5C;text-decoration:none">GetSongBPM</a>
+</footer>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
