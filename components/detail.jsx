@@ -380,8 +380,29 @@ function DiscogsRefreshButton({ record, onRefresh }) {
       setMsg('Updated');
       setTimeout(() => setMsg(''), 2000);
     } catch (e) {
-      setMsg(e.message || 'Failed');
-      setTimeout(() => setMsg(''), 4000);
+      // Missing-token case → prompt for it, save, retry once.
+      if (/token not found/i.test(e.message || '')) {
+        const token = prompt(
+          'Paste your Discogs personal access token to enable per-album refresh.\n\n' +
+          'Generate one at discogs.com/settings/developers — it\'s stored only in your browser.'
+        );
+        if (token && token.trim()) {
+          localStorage.setItem('cs-discogs-token', token.trim());
+          try {
+            await onRefresh(record);
+            setMsg('Updated');
+            setTimeout(() => setMsg(''), 2000);
+            setBusy(false);
+            return;
+          } catch (retryErr) {
+            setMsg(retryErr.message || 'Failed');
+            setTimeout(() => setMsg(''), 4000);
+          }
+        }
+      } else {
+        setMsg(e.message || 'Failed');
+        setTimeout(() => setMsg(''), 4000);
+      }
     } finally {
       setBusy(false);
     }
