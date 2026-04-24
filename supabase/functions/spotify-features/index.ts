@@ -13,6 +13,26 @@
 
 const USER_AGENT = "KollectorStudio/0.4 (https://kollector.studio)";
 
+// Per-request upstream timeouts. Without these, a slow/stalled upstream
+// (MusicBrainz under rate pressure, AcousticBrainz on archived infra) will
+// hang the whole edge function until Supabase's own timeout kills it — which
+// surfaces as a 503 with no CORS headers.
+const TIMEOUT_MS = {
+  musicBrainz: 6000,
+  acousticBrainz: 5000,
+  getSongBpm: 6000,
+};
+
+async function fetchWithTimeout(url, init, ms) {
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(url, Object.assign({}, init, { signal: ctrl.signal }));
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
@@ -67,11 +87,15 @@ async function musicBrainzSearch(artist, title) {
   const q = `artist:"${qArtist}" AND recording:"${qTitle}"`;
   const url = "https://musicbrainz.org/ws/2/recording?query=" +
     encodeURIComponent(q) + "&fmt=json&limit=5";
-  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  let res;
+  try {
+    res = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT } }, TIMEOUT_MS.musicBrainz);
+  } catch {
+    return []; // timeout or network error
+  }
   if (!res.ok) return [];
   const data = await res.json();
   const recordings = data.recordings || [];
-  // Return MBIDs sorted by MB's score (already sorted descending).
   return recordings.map((r) => ({
     id: r.id,
     score: r.score || 0,
@@ -82,8 +106,13 @@ async function musicBrainzSearch(artist, title) {
 
 async function acousticBrainzLookup(mbid) {
   const url = "https://acousticbrainz.org/api/v1/" + mbid + "/low-level";
-  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
-  if (!res.ok) return null; // 404 = not in archive
+  let res;
+  try {
+    res = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT } }, TIMEOUT_MS.acousticBrainz);
+  } catch {
+    return null; // timeout = treat as "not in archive"
+  }
+  if (!res.ok) return null;
   const data = await res.json();
   const bpmRaw = data.rhythm && data.rhythm.bpm;
   const bpm = typeof bpmRaw === "number" && bpmRaw > 0 ? Math.round(bpmRaw) : null;
@@ -110,7 +139,7 @@ async function getSongBpmLookup(artist, title) {
   };
   let res;
   try {
-    res = await fetch(url, { headers: headers });
+    res = await fetchWithTimeout(url, { headers: headers }, TIMEOUT_MS.getSongBpm);
   } catch (e) {
     return { result: null, debug: { gs: "fetch-threw", err: String(e) } };
   }
