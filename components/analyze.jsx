@@ -1,11 +1,9 @@
-// GetSongBPM integration — fills in missing BPM/key per track.
-// Free API, requires attribution (shown in modal). Get a key at https://getsongbpm.com/api
-
-const GSBPM_DEFAULT_KEY = '92947fe415c8cddf9b400174476de981';
+// BPM/key matcher. Calls the Supabase edge function `spotify-features`
+// which resolves artist+title -> AcousticBrainz (primary) or GetSongBPM
+// (fallback). Both services' keys/attribution are handled server-side,
+// so users don't need to supply anything.
 
 function AnalyzeModal({ open, records, onClose, onApply }) {
-  const [apiKey, setApiKey] = React.useState(() =>
-    localStorage.getItem('cs-gsbpm-key') || GSBPM_DEFAULT_KEY);
   const [busy, setBusy] = React.useState(false);
   const [progress, setProgress] = React.useState({ done: 0, total: 0, hits: 0 });
   const [error, setError] = React.useState('');
@@ -27,8 +25,6 @@ function AnalyzeModal({ open, records, onClose, onApply }) {
 
   const start = async () => {
     setError(''); setDone(null); cancelRef.current = false;
-    if (!apiKey.trim()) { setError('API key required.'); return; }
-    localStorage.setItem('cs-gsbpm-key', apiKey.trim());
     setBusy(true);
     setProgress({ done: 0, total: targets.length, hits: 0 });
 
@@ -38,7 +34,7 @@ function AnalyzeModal({ open, records, onClose, onApply }) {
       if (cancelRef.current) break;
       const t = targets[i];
       try {
-        const result = await lookupGetSongBpm(t.artist, t.title, apiKey.trim());
+        const result = await lookupGetSongBpm(t.artist, t.title);
         if (result) {
           (updates[t.recordId] ||= []).push({ trackIndex: t.trackIndex, ...result });
           hits++;
@@ -82,26 +78,14 @@ function AnalyzeModal({ open, records, onClose, onApply }) {
         </div>
 
         <p style={{ fontSize: 13, color: 'var(--dim)', lineHeight: 1.5, margin: '0 0 14px' }}>
-          Looks up BPM and key per track via{' '}
-          <a href="https://getsongbpm.com/api" target="_blank" rel="noreferrer"
-            style={{ color: 'var(--accent)' }}>GetSongBPM</a>. Free, requires a backlink attribution.
-          Get a key at the link. Stored in your browser only.
+          Looks up BPM and key per track using{' '}
+          <a href="https://acousticbrainz.org" target="_blank" rel="noreferrer"
+            style={{ color: 'var(--accent)' }}>AcousticBrainz</a>
+          {' '}with a{' '}
+          <a href="https://getsongbpm.com" target="_blank" rel="noreferrer"
+            style={{ color: 'var(--accent)' }}>GetSongBPM</a>
+          {' '}fallback. No setup required — just hit Start.
         </p>
-
-        <label style={{ display: 'block', marginBottom: 12 }}>
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.2,
-            textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 5,
-          }}>API key</div>
-          <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-            disabled={busy} placeholder="your-api-key"
-            style={{
-              width: '100%', padding: '10px 12px', borderRadius: 6,
-              background: 'var(--hover)', border: '1px solid var(--border)',
-              color: 'var(--fg)', fontSize: 13, fontFamily: 'JetBrains Mono, monospace',
-              outline: 'none', boxSizing: 'border-box',
-            }} />
-        </label>
 
         <div style={{
           padding: '10px 12px', borderRadius: 6, background: 'var(--hover)',
@@ -170,7 +154,10 @@ function AnalyzeModal({ open, records, onClose, onApply }) {
           fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 0.5,
           color: 'var(--dim)', textAlign: 'center',
         }}>
-          Tempo &amp; key data courtesy of{' '}
+          Data courtesy of{' '}
+          <a href="https://acousticbrainz.org" target="_blank" rel="noreferrer"
+            style={{ color: 'var(--accent)' }}>AcousticBrainz</a>
+          {' '}&amp;{' '}
           <a href="https://getsongbpm.com" target="_blank" rel="noreferrer"
             style={{ color: 'var(--accent)' }}>GetSongBPM.com</a>
         </div>
@@ -193,9 +180,10 @@ const secondaryBtnStyle2 = {
 // ─────────── API ───────────
 
 // Calls our Supabase edge function `spotify-features` which resolves
-// artist+title → Spotify track → audio features (tempo + Camelot key).
-// CORS + auth are handled server-side; we just need the anon key header.
-async function lookupGetSongBpm(artist, title, _ignoredKey) {
+// artist+title -> AcousticBrainz (primary) or GetSongBPM (fallback) and
+// returns { bpm, key } with key in Camelot notation.
+// Auth is server-side; client only needs the public anon key.
+async function lookupGetSongBpm(artist, title) {
   if (!artist || !title) return null;
   const base = 'https://iqnqwweukbcjgyspqbyg.supabase.co/functions/v1/spotify-features';
   const url = `${base}?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`;
