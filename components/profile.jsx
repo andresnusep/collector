@@ -54,7 +54,7 @@ function ProfileAvatar({ profile, size = 40, onClick }) {
   return <div style={wrapperStyle}>{content}</div>;
 }
 
-function ProfilePage({ profile, setProfile, records, savedSets, user, onSignOut }) {
+function ProfilePage({ profile, setProfile, records, savedSets, user, onSignOut, onRetryBpmAnalysis }) {
   const stats = React.useMemo(() => {
     const totalRecords = records.length;
     const gigCount = savedSets.reduce((sum, s) => {
@@ -246,6 +246,44 @@ function ProfilePage({ profile, setProfile, records, savedSets, user, onSignOut 
           value={profile.links.website} onChange={v => updateLink('website', v)}
           placeholder="https://…" />
       </div>
+
+      {/* Data tools */}
+      {onRetryBpmAnalysis && (() => {
+        const missing = records.reduce((n, r) => n + (r.tracks || []).filter(
+          t => t.bpm == null || !t.key).length, 0);
+        return (
+          <>
+            <div style={{ height: 28 }} />
+            <SectionLabel>Data tools</SectionLabel>
+            <div style={{
+              padding: 16, borderRadius: 10,
+              background: 'var(--hover)', border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
+                  Retry BPM &amp; key analysis
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--dim)', lineHeight: 1.4 }}>
+                  {missing > 0
+                    ? `${missing} track${missing === 1 ? '' : 's'} still missing BPM or key. Click to re-run the background analyzer via Spotify.`
+                    : 'All tracks have BPM and key. Click to re-check anyway.'}
+                </div>
+              </div>
+              <button onClick={() => {
+                onRetryBpmAnalysis();
+                alert('Re-analysis started. BPM and key will fill in gradually over the next few minutes — keep the tab open.');
+              }} style={{
+                padding: '10px 18px', borderRadius: 8, border: 'none',
+                background: 'var(--accent)', color: 'var(--on-accent)',
+                fontSize: 11, fontWeight: 700, letterSpacing: 1,
+                textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'inherit',
+                flexShrink: 0,
+              }}>Retry</button>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }

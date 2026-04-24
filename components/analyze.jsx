@@ -192,26 +192,25 @@ const secondaryBtnStyle2 = {
 
 // ─────────── API ───────────
 
+// Calls our Supabase edge function `spotify-features` which resolves
+// artist+title → Spotify track → audio features (tempo + Camelot key).
+// CORS + auth are handled server-side; we just need the anon key header.
 async function lookupGetSongBpm(artist, title, _ignoredKey) {
   if (!artist || !title) return null;
-  const cleanArtist = artist.replace(/\s*&\s*/g, ' ').trim();
-  const cleanTitle = title.replace(/\s*\([^)]*\)/g, '').trim();
-  const lookup = `song:${cleanTitle}+artist:${cleanArtist}`;
-  // Call our Supabase edge function (has CORS + stores the real API key server-side).
-  const base = 'https://iqnqwweukbcjgyspqbyg.supabase.co/functions/v1/bpm-lookup';
-  const url = `${base}?lookup=${encodeURIComponent(lookup)}`;
+  const base = 'https://iqnqwweukbcjgyspqbyg.supabase.co/functions/v1/spotify-features';
+  const url = `${base}?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`;
   const anon = window.SUPABASE_ANON_KEY;
-  const res = await fetch(url, anon ? { headers: { apikey: anon, authorization: `Bearer ${anon}` } } : {});
-  if (!res.ok) return null;
-  const data = await res.json();
-  const hit = Array.isArray(data.search) ? data.search[0] : null;
-  if (!hit) return null;
-  const bpm = Number(hit.tempo);
-  const key = keyToCamelot(hit.key_of);
-  return {
-    bpm: Number.isFinite(bpm) && bpm > 0 ? Math.round(bpm) : null,
-    key: key || null,
-  };
+  try {
+    const res = await fetch(url, anon
+      ? { headers: { apikey: anon, authorization: `Bearer ${anon}` } }
+      : {});
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      bpm: Number.isFinite(data.bpm) && data.bpm > 0 ? Math.round(data.bpm) : null,
+      key: data.key || null,
+    };
+  } catch { return null; }
 }
 
 // Convert "C", "Am", "F#m", "Bb" etc. into Camelot notation like "8B", "8A".

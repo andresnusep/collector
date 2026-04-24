@@ -519,7 +519,19 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           {view === 'profile' && (
             <ProfilePage profile={profile} setProfile={setProfile}
               records={records} savedSets={savedSets}
-              user={user} onSignOut={onSignOut} />
+              user={user} onSignOut={onSignOut}
+              onRetryBpmAnalysis={() => {
+                // Clear the bpmTried flag so the background auto-analyzer
+                // will re-run through every track missing BPM or key.
+                setRecords(cur => cur.map(r => ({
+                  ...r,
+                  tracks: r.tracks.map(t => {
+                    const missing = t.bpm == null || !t.key;
+                    return missing ? { ...t, bpmTried: false } : t;
+                  }),
+                })));
+                autoAnalyzeRunning.current = false;
+              }} />
           )}
           {view === 'crates' && (
             <CratesPage crates={crates} records={records}
@@ -760,15 +772,16 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
         <ApiStatus label="Match BPM" ok />
       </div>
 
-      {/* Attribution — required by GetSongBPM terms */}
+      {/* Attribution — Spotify for BPM/key, iTunes for previews */}
       <div style={{
         marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)',
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 0.5,
         color: 'var(--dim)', lineHeight: 1.5,
       }}>
         Tempo &amp; key via{' '}
-        <a href="https://getsongbpm.com" target="_blank" rel="noreferrer"
-          style={{ color: 'var(--accent)', textDecoration: 'none' }}>GetSongBPM.com</a>
+        <a href="https://developer.spotify.com/" target="_blank" rel="noreferrer"
+          style={{ color: 'var(--accent)', textDecoration: 'none' }}>Spotify</a>
+        {' '}· previews via iTunes
       </div>
     </aside>
   );
