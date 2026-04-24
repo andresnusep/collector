@@ -506,7 +506,8 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           )}
           {view === 'profile' && (
             <ProfilePage profile={profile} setProfile={setProfile}
-              records={records} savedSets={savedSets} />
+              records={records} savedSets={savedSets}
+              user={user} onSignOut={onSignOut} />
           )}
           {view === 'crates' && (
             <CratesPage crates={crates} records={records}
@@ -647,47 +648,28 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
         }}>For vinyl DJs · v0.4</div>
       </div>
 
-      {/* Profile chip */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20,
+      {/* Profile chip — click to open profile page (includes sign out) */}
+      <button onClick={() => setView('profile')} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 10px', borderRadius: 10, marginBottom: 20,
+        background: view === 'profile' ? 'var(--hover)' : 'transparent',
+        border: '1px solid var(--border)',
+        color: 'var(--fg)', fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+        minWidth: 0,
       }}>
-        <button onClick={() => setView('profile')} style={{
-          flex: 1, display: 'flex', alignItems: 'center', gap: 10,
-          padding: '8px 10px', borderRadius: 10,
-          background: view === 'profile' ? 'var(--hover)' : 'transparent',
-          border: '1px solid var(--border)',
-          color: 'var(--fg)', fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
-          minWidth: 0,
-        }}>
-          <ProfileAvatar profile={profile} size={34} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile.djName || profile.name || 'Set up profile'}
-            </div>
-            <div style={{
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 0.5,
-              color: 'var(--dim)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>{user?.email || 'Edit your profile'}</div>
+        <ProfileAvatar profile={profile} size={34} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {profile.djName || profile.name || 'Set up profile'}
           </div>
-        </button>
-        {onSignOut && (
-          <button onClick={() => { if (confirm('Sign out?')) onSignOut(); }}
-            title="Sign out" style={{
-              width: 36, height: 36, borderRadius: 10,
-              border: '1px solid var(--border)', background: 'transparent',
-              color: 'var(--dim)', cursor: 'pointer', flexShrink: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
-          </button>
-        )}
-      </div>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 0.5,
+            color: 'var(--dim)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{user?.email || 'Edit your profile'}</div>
+        </div>
+      </button>
 
       <div style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
@@ -705,8 +687,6 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
           badge={set.length > 0 ? set.length : null} accent={set.length > 0} />
         <NavItem icon={Icon.Grid} label="Dashboard"
           active={view === 'dashboard'} onClick={() => setView('dashboard')} />
-        <NavItem icon={Icon.User} label="Profile"
-          active={view === 'profile'} onClick={() => setView('profile')} />
       </nav>
 
       <SavedSetsList savedSets={savedSets} currentSet={set}

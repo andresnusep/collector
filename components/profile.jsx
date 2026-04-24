@@ -54,7 +54,7 @@ function ProfileAvatar({ profile, size = 40, onClick }) {
   return <div style={wrapperStyle}>{content}</div>;
 }
 
-function ProfilePage({ profile, setProfile, records, savedSets }) {
+function ProfilePage({ profile, setProfile, records, savedSets, user, onSignOut }) {
   const stats = React.useMemo(() => {
     const totalRecords = records.length;
     const gigCount = savedSets.reduce((sum, s) => {
@@ -127,7 +127,31 @@ function ProfilePage({ profile, setProfile, records, savedSets }) {
               textTransform: 'uppercase', color: 'var(--dim)', marginTop: 4,
             }}>{profile.location}</div>
           )}
+          {user?.email && (
+            <div style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 0.5,
+              color: 'var(--dim)', marginTop: 6,
+            }}>{user.email}</div>
+          )}
         </div>
+        {onSignOut && (
+          <button onClick={() => { if (confirm('Sign out?')) onSignOut(); }}
+            title="Sign out" style={{
+              padding: '8px 14px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'transparent',
+              color: 'var(--dim)', cursor: 'pointer',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+              letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700,
+              display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+            }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign out
+          </button>
+        )}
       </div>
 
       {/* Stats */}
