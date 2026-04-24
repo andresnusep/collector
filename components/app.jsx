@@ -685,7 +685,7 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
           textTransform: 'uppercase', color: 'var(--dim)', marginTop: 6,
-        }}>For vinyl DJs · v0.4</div>
+        }}>For vinyl DJs · v1.0 BETA</div>
       </div>
 
       {/* Profile chip — click to open profile page (includes sign out) */}

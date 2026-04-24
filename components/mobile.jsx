@@ -158,10 +158,10 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
         borderTop: `1px solid ${border}`, background: bg,
       }}>
         {[
+          { id: 'now', label: 'Gig', icon: Icon.Disc },
           { id: 'lib', label: 'Library', icon: Icon.Dig },
           { id: 'crates', label: 'Crates', icon: Icon.Heart },
           { id: 'set', label: 'Sets', icon: Icon.Deck },
-          { id: 'now', label: 'Gig', icon: Icon.Disc },
         ].map(t => (
           <button key={t.id} onClick={() => {
             if (t.id === 'set') setSetPage('hub');

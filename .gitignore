@@ -2,3 +2,8 @@
 .claude/
 node_modules/
 *.log
+
+# Supabase CLI working directory
+supabase/.temp/
+supabase/.branches/
+supabase/logs/

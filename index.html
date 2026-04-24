@@ -57,6 +57,21 @@
   button { font-family: inherit; }
   input { font-family: inherit; }
 
+  /* iOS zooms <input>/<textarea>/<select> on focus if font-size < 16px. Force
+     16px on mobile viewports to disable the zoom, overriding inline styles
+     that use smaller fonts for visual density on desktop. */
+  @media (max-width: 768px) {
+    input, textarea, select {
+      font-size: 16px !important;
+    }
+    /* Hide the static attribution footer on mobile — GetSongBPM's verifier
+       still sees the link in raw HTML, but it doesn't take up screen space
+       on a phone. Desktop shows it in the bottom-right corner. */
+    footer[data-cs-attribution] {
+      display: none !important;
+    }
+  }
+
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -131,7 +146,7 @@
      their site before activating the API key. Because the in-app attribution
      is rendered by React, it's invisible to non-JS verifier crawlers. This
      bottom-right pinned footer keeps the link in initial HTML source. -->
-<footer style="position:fixed;bottom:6px;right:10px;
+<footer data-cs-attribution style="position:fixed;bottom:6px;right:10px;
     font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.4px;
     color:#6b6763;background:transparent;z-index:1">
   BPM &amp; key via
