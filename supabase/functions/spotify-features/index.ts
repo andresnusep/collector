@@ -93,25 +93,53 @@ async function acousticBrainzLookup(mbid) {
   return { bpm: bpm, key: key };
 }
 
-// GetSongBPM fallback. Returns { bpm, key } or null. `key_of` from GetSongBPM
-// is a note name like "C", "F#m", "Bbm" — convert to Camelot.
+// GetSongBPM fallback. Returns { result, debug } — debug carries diagnostics
+// when the lookup fails so the caller can surface them.
 async function getSongBpmLookup(artist, title) {
   const apiKey = Deno.env.get("GETSONGBPM_KEY");
-  if (!apiKey) return null;
+  if (!apiKey) return { result: null, debug: { gs: "no-key" } };
   const lookup = "song:" + title + "+artist:" + artist;
   const url = "https://api.getsongbpm.com/search/?api_key=" +
     encodeURIComponent(apiKey) + "&type=both&lookup=" + encodeURIComponent(lookup);
-  const res = await fetch(url);
-  if (!res.ok) return null;
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    return { result: null, debug: { gs: "fetch-threw", err: String(e) } };
+  }
   const ct = res.headers.get("content-type") || "";
-  if (!ct.includes("application/json")) return null; // HTML error page
-  const data = await res.json();
+  const body = await res.text();
+  if (!res.ok) {
+    return {
+      result: null,
+      debug: { gs: "http-" + res.status, ct: ct, snippet: body.slice(0, 200) },
+    };
+  }
+  if (!ct.includes("application/json")) {
+    return {
+      result: null,
+      debug: { gs: "non-json", ct: ct, snippet: body.slice(0, 200) },
+    };
+  }
+  let data;
+  try {
+    data = JSON.parse(body);
+  } catch (e) {
+    return { result: null, debug: { gs: "bad-json", snippet: body.slice(0, 200) } };
+  }
   const hit = Array.isArray(data.search) ? data.search[0] : null;
-  if (!hit) return null;
+  if (!hit) {
+    const searchType = typeof data.search;
+    const msg = (data.search && data.search.error) || data.error || null;
+    return {
+      result: null,
+      debug: { gs: "no-hit", searchType: searchType, msg: msg },
+    };
+  }
   const bpmRaw = Number(hit.tempo);
   const bpm = Number.isFinite(bpmRaw) && bpmRaw > 0 ? Math.round(bpmRaw) : null;
   const key = noteToCamelot(hit.key_of);
-  return { bpm: bpm, key: key };
+  return { result: { bpm: bpm, key: key }, debug: { gs: "ok" } };
 }
 
 // Parse "C", "Am", "F#m", "Bb" -> Camelot. Also passes through existing Camelot ("5A").
@@ -166,10 +194,10 @@ Deno.serve(async (req) => {
 
     // Step 3: fallback to GetSongBPM.
     const gs = await getSongBpmLookup(artist, title);
-    if (gs && gs.bpm != null) {
+    if (gs.result && gs.result.bpm != null) {
       return jsonResponse({
-        bpm: gs.bpm,
-        key: gs.key,
+        bpm: gs.result.bpm,
+        key: gs.result.key,
         matched: true,
         source: "getsongbpm",
       });
@@ -185,6 +213,7 @@ Deno.serve(async (req) => {
       mbid: candidates.length ? candidates[0].id : undefined,
       trackName: candidates.length ? candidates[0].title : undefined,
       trackArtist: candidates.length ? candidates[0].artist : undefined,
+      gsDebug: gs.debug,
     });
   } catch (e) {
     return jsonResponse({ error: String(e && e.message ? e.message : e) }, 500);
