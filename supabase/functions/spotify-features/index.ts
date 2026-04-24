@@ -6,7 +6,7 @@
 //
 // Client ID is public so hardcoded below.
 
-const SPOTIFY_CLIENT_ID = "9c56376392234db29ec8efdd0f98789d";
+const SPOTIFY_CLIENT_ID = "cc00d64070b54dd5875b94a7500116f5";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
