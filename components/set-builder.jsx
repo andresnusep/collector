@@ -231,19 +231,7 @@ function SetBuilder({ set, records, onRemove, onReorder, onClear, onSwipe, swipe
               cursor: 'pointer', fontSize: 11, fontWeight: 600, letterSpacing: 0.5,
               textTransform: 'uppercase', fontFamily: 'inherit',
             }}>Clear</button>
-            <button onClick={() => {
-              if (setName && setName.trim()) { onSaveSet(setName.trim()); return; }
-              const defaultName = `Set ${new Date().toLocaleDateString()}`;
-              const name = prompt('Name this set:', defaultName);
-              if (name && name.trim()) { onSetNameChange(name.trim()); onSaveSet(name.trim()); }
-            }} style={{
-              flex: 1, padding: '10px',
-              background: 'color-mix(in oklab, var(--accent) 15%, transparent)',
-              border: '1px solid var(--accent)', borderRadius: 6, color: 'var(--fg)',
-              cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
-              textTransform: 'uppercase', fontFamily: 'inherit',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            }}>{Icon.Heart} Save set</button>
+            <ExportMenu resolved={resolved} />
             <button onClick={onLaunchGig} title="Launch fullscreen gig mode" style={{
               flex: 1, padding: '10px',
               background: 'color-mix(in oklab, var(--accent) 15%, transparent)',
@@ -252,7 +240,20 @@ function SetBuilder({ set, records, onRemove, onReorder, onClear, onSwipe, swipe
               textTransform: 'uppercase', fontFamily: 'inherit',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}>▶ Gig mode</button>
-            <ExportMenu resolved={resolved} />
+            <button onClick={() => {
+              if (setName && setName.trim()) { onSaveSet(setName.trim()); return; }
+              const defaultName = `Set ${new Date().toLocaleDateString()}`;
+              const name = prompt('Name this set:', defaultName);
+              if (name && name.trim()) { onSetNameChange(name.trim()); onSaveSet(name.trim()); }
+            }} style={{
+              flex: 1.2, padding: '10px',
+              background: 'var(--accent)', color: 'var(--on-accent)',
+              border: '1px solid var(--accent)', borderRadius: 6,
+              cursor: 'pointer', fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+              textTransform: 'uppercase', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              boxShadow: '0 6px 18px color-mix(in oklab, var(--accent) 40%, transparent)',
+            }}>{Icon.Heart} Save set</button>
           </div>
         )}
       </div>
