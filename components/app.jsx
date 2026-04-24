@@ -733,7 +733,7 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
         <span style={{ flex: 1 }}>Add record</span>
       </button>
       <button onClick={onOpenImport} style={{
-        marginBottom: 10, padding: '10px 12px',
+        marginBottom: 6, padding: '10px 12px',
         background: 'transparent', color: 'var(--fg)',
         border: '1px dashed var(--border)', borderRadius: 8,
         cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
@@ -743,6 +743,18 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--fg)'; }}>
         {Icon.Discogs}
         <span style={{ flex: 1 }}>Import from Discogs</span>
+      </button>
+      <button onClick={onAnalyze} style={{
+        marginBottom: 10, padding: '10px 12px',
+        background: 'transparent', color: 'var(--fg)',
+        border: '1px solid var(--border)', borderRadius: 8,
+        cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
+        display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--fg)'; }}>
+        {Icon.Search}
+        <span style={{ flex: 1 }}>Analyze BPM &amp; key</span>
       </button>
 
       {/* Collection stats */}
@@ -772,15 +784,18 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
         <ApiStatus label="Match BPM" ok />
       </div>
 
-      {/* Attribution — Spotify for BPM/key, iTunes for previews */}
+      {/* Attribution — AcousticBrainz / GetSongBPM for BPM/key, iTunes for previews */}
       <div style={{
         marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)',
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 0.5,
         color: 'var(--dim)', lineHeight: 1.5,
       }}>
         Tempo &amp; key via{' '}
-        <a href="https://developer.spotify.com/" target="_blank" rel="noreferrer"
-          style={{ color: 'var(--accent)', textDecoration: 'none' }}>Spotify</a>
+        <a href="https://acousticbrainz.org" target="_blank" rel="noreferrer"
+          style={{ color: 'var(--accent)', textDecoration: 'none' }}>AcousticBrainz</a>
+        {' '}&amp;{' '}
+        <a href="https://getsongbpm.com" target="_blank" rel="noreferrer"
+          style={{ color: 'var(--accent)', textDecoration: 'none' }}>GetSongBPM</a>
         {' '}· previews via iTunes
       </div>
     </aside>
