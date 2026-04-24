@@ -1,13 +1,12 @@
-// Supabase Edge Function: artist+title -> Spotify track -> audio features.
+// Supabase Edge Function: artist+title -> MusicBrainz (MBID) -> AcousticBrainz (BPM + key).
 // Returns { bpm, key } where key is Camelot notation.
 //
-// Deploy:  supabase functions deploy spotify-features
-// Secrets: supabase secrets set SPOTIFY_CLIENT_SECRET=your_secret
+// MusicBrainz:  https://musicbrainz.org/ws/2/recording (1 req/sec, needs User-Agent)
+// AcousticBrainz: https://acousticbrainz.org/api/v1/{mbid}/low-level (no auth, archived but data lives)
 //
-// Client ID is public so hardcoded below.
+// Name says "spotify-features" for legacy reasons — the client still calls this URL.
 
-// Client ID is public (not a secret); Client Secret is in env.
-const SPOTIFY_CLIENT_ID = "9c56376392234db29ec8efdd0f98789d";
+const USER_AGENT = "KollectorStudio/0.4 (https://kollector.studio)";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,43 +14,24 @@ const CORS = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-let cachedToken = null;
+// Note name + scale -> Camelot.
+const CAMELOT_MAJOR = {
+  "C":  "8B",  "C#": "3B",  "Db": "3B",  "D": "10B", "D#": "5B",  "Eb": "5B",
+  "E":  "12B", "F":  "7B",  "F#": "2B",  "Gb":"2B",  "G":  "9B",  "G#": "4B",
+  "Ab": "4B",  "A":  "11B", "A#": "6B",  "Bb": "6B", "B":  "1B",  "Cb": "1B",
+};
+const CAMELOT_MINOR = {
+  "C":  "5A",  "C#": "12A", "Db": "12A", "D":  "7A",  "D#": "2A",  "Eb": "2A",
+  "E":  "9A",  "F":  "4A",  "F#": "11A", "Gb": "11A", "G":  "6A",  "G#": "1A",
+  "Ab": "1A",  "A":  "8A",  "A#": "3A",  "Bb": "3A",  "B":  "10A",
+};
 
-async function getAccessToken() {
-  const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt > now + 30000) {
-    return cachedToken.token;
-  }
-  const secret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
-  if (!secret) throw new Error("server missing SPOTIFY_CLIENT_SECRET");
-
-  const basic = btoa(SPOTIFY_CLIENT_ID + ":" + secret);
-  const res = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: {
-      "Authorization": "Basic " + basic,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  });
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error("spotify auth failed: " + res.status + " " + body.slice(0, 200));
-  }
-  const data = await res.json();
-  cachedToken = {
-    token: data.access_token,
-    expiresAt: now + (data.expires_in || 3600) * 1000,
-  };
-  return cachedToken.token;
-}
-
-const MAJOR = ["8B","3B","10B","5B","12B","7B","2B","9B","4B","11B","6B","1B"];
-const MINOR = ["5A","12A","7A","2A","9A","4A","11A","6A","1A","8A","3A","10A"];
-
-function toCamelot(key, mode) {
-  if (typeof key !== "number" || key < 0 || key > 11) return null;
-  return mode === 1 ? MAJOR[key] : MINOR[key];
+function toCamelot(keyRoot, keyScale) {
+  if (!keyRoot) return null;
+  const root = String(keyRoot).trim();
+  const scale = String(keyScale || "").toLowerCase();
+  const table = scale === "minor" ? CAMELOT_MINOR : CAMELOT_MAJOR;
+  return table[root] || null;
 }
 
 function cleanTitle(s) {
@@ -75,6 +55,39 @@ function jsonResponse(obj, status) {
   });
 }
 
+async function musicBrainzSearch(artist, title) {
+  // Quote-escape both fields.
+  const qArtist = artist.replace(/"/g, "");
+  const qTitle = title.replace(/"/g, "");
+  const q = `artist:"${qArtist}" AND recording:"${qTitle}"`;
+  const url = "https://musicbrainz.org/ws/2/recording?query=" +
+    encodeURIComponent(q) + "&fmt=json&limit=5";
+  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const recordings = data.recordings || [];
+  // Return MBIDs sorted by MB's score (already sorted descending).
+  return recordings.map((r) => ({
+    id: r.id,
+    score: r.score || 0,
+    title: r.title,
+    artist: ((r["artist-credit"] || [])[0] || {}).name,
+  }));
+}
+
+async function acousticBrainzLookup(mbid) {
+  const url = "https://acousticbrainz.org/api/v1/" + mbid + "/low-level";
+  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  if (!res.ok) return null; // 404 = not in archive
+  const data = await res.json();
+  const bpmRaw = data.rhythm && data.rhythm.bpm;
+  const bpm = typeof bpmRaw === "number" && bpmRaw > 0 ? Math.round(bpmRaw) : null;
+  const keyRoot = data.tonal && data.tonal.key_key;
+  const keyScale = data.tonal && data.tonal.key_scale;
+  const key = toCamelot(keyRoot, keyScale);
+  return { bpm: bpm, key: key };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS });
@@ -91,85 +104,39 @@ Deno.serve(async (req) => {
   const title = cleanTitle(titleRaw);
 
   try {
-    const token = await getAccessToken();
-
-    const q = "track:" + title + " artist:" + artist;
-    const searchUrl = "https://api.spotify.com/v1/search?q=" +
-      encodeURIComponent(q) + "&type=track&limit=5";
-    const sr = await fetch(searchUrl, {
-      headers: { "Authorization": "Bearer " + token },
-    });
-    if (!sr.ok) {
-      return jsonResponse({ error: "spotify search failed", status: sr.status }, 502);
-    }
-    const sdata = await sr.json();
-    const items = (sdata.tracks && sdata.tracks.items) || [];
-    if (!items.length) {
-      return jsonResponse({ bpm: null, key: null, matched: false });
+    // Step 1: find MBIDs on MusicBrainz.
+    const candidates = await musicBrainzSearch(artist, title);
+    if (!candidates.length) {
+      return jsonResponse({ bpm: null, key: null, matched: false, source: "musicbrainz:miss" });
     }
 
-    const lowArtist = artist.toLowerCase();
-    const lowTitle = title.toLowerCase();
-    const altWords = ["remix","live","karaoke","cover","instrumental","acoustic","demo","edit"];
-    let wantsAlt = false;
-    for (let i = 0; i < altWords.length; i++) {
-      if (lowTitle.indexOf(altWords[i]) !== -1) { wantsAlt = true; break; }
-    }
-
-    const scored = items.map(function (it) {
-      const name = String(it.name || "").toLowerCase();
-      const artNames = (it.artists || []).map(function (a) {
-        return String(a.name || "").toLowerCase();
-      });
-      let s = 0;
-      let exactArtist = false;
-      let partialArtist = false;
-      for (let i = 0; i < artNames.length; i++) {
-        const n = artNames[i];
-        if (n === lowArtist) { exactArtist = true; break; }
-        if (n.indexOf(lowArtist) !== -1 || lowArtist.indexOf(n) !== -1) partialArtist = true;
+    // Step 2: walk candidates until one has AcousticBrainz data with at least BPM.
+    for (let i = 0; i < Math.min(candidates.length, 5); i++) {
+      const c = candidates[i];
+      const ab = await acousticBrainzLookup(c.id);
+      if (ab && ab.bpm != null) {
+        return jsonResponse({
+          bpm: ab.bpm,
+          key: ab.key,
+          matched: true,
+          source: "acousticbrainz",
+          mbid: c.id,
+          trackName: c.title,
+          trackArtist: c.artist,
+          mbScore: c.score,
+        });
       }
-      if (exactArtist) s += 50;
-      else if (partialArtist) s += 30;
-      if (name === lowTitle) s += 30;
-      else if (name.indexOf(lowTitle) !== -1 || lowTitle.indexOf(name) !== -1) s += 18;
-      if (!wantsAlt) {
-        for (let i = 0; i < altWords.length; i++) {
-          if (name.indexOf(altWords[i]) !== -1) { s -= 15; break; }
-        }
-      }
-      s += Math.min(20, Math.floor((it.popularity || 0) / 5));
-      return { it: it, s: s };
-    });
-    scored.sort(function (a, b) { return b.s - a.s; });
-    const best = scored[0] && scored[0].it;
-    if (!best) {
-      return jsonResponse({ bpm: null, key: null, matched: false });
     }
 
-    const afUrl = "https://api.spotify.com/v1/audio-features/" + best.id;
-    const afr = await fetch(afUrl, {
-      headers: { "Authorization": "Bearer " + token },
-    });
-    if (!afr.ok) {
-      return jsonResponse({
-        bpm: null, key: null, matched: true,
-        spotifyId: best.id, trackName: best.name,
-        error: "audio-features failed", status: afr.status,
-      });
-    }
-    const af = await afr.json();
-    const tempo = af.tempo;
-    const bpm = typeof tempo === "number" && tempo > 0 ? Math.round(tempo) : null;
-    const key = toCamelot(af.key, af.mode);
-
+    // MBIDs found but none had AcousticBrainz features.
     return jsonResponse({
-      bpm: bpm,
-      key: key,
+      bpm: null,
+      key: null,
       matched: true,
-      spotifyId: best.id,
-      trackName: best.name,
-      trackArtist: (best.artists || []).map(function (a) { return a.name; }).join(", "),
+      source: "acousticbrainz:no-features",
+      mbid: candidates[0].id,
+      trackName: candidates[0].title,
+      trackArtist: candidates[0].artist,
     });
   } catch (e) {
     return jsonResponse({ error: String(e && e.message ? e.message : e) }, 500);
