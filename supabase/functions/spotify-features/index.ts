@@ -1,42 +1,40 @@
-// Supabase Edge Function: resolve artist+title → Spotify track →
-// audio features (tempo / key). Normalized to { bpm, key } where key
-// is Camelot notation.
+// Supabase Edge Function: artist+title -> Spotify track -> audio features.
+// Returns { bpm, key } where key is Camelot notation.
 //
 // Deploy:  supabase functions deploy spotify-features
 // Secrets: supabase secrets set SPOTIFY_CLIENT_SECRET=your_secret
 //
-// Client ID is public so it's hardcoded below.
+// Client ID is public so hardcoded below.
 
-const SPOTIFY_CLIENT_ID = '9c56376392234db29ec8efdd0f98789d';
+const SPOTIFY_CLIENT_ID = "9c56376392234db29ec8efdd0f98789d";
 
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// In-memory token cache (survives across warm invocations).
-let cachedToken: { token: string; expiresAt: number } | null = null;
+let cachedToken = null;
 
-async function getAccessToken(): Promise<string> {
+async function getAccessToken() {
   const now = Date.now();
-  if (cachedToken && cachedToken.expiresAt > now + 30_000) {
+  if (cachedToken && cachedToken.expiresAt > now + 30000) {
     return cachedToken.token;
   }
-  const secret = Deno.env.get('SPOTIFY_CLIENT_SECRET');
-  if (!secret) throw new Error('server missing SPOTIFY_CLIENT_SECRET');
+  const secret = Deno.env.get("SPOTIFY_CLIENT_SECRET");
+  if (!secret) throw new Error("server missing SPOTIFY_CLIENT_SECRET");
 
-  const basic = btoa(`${SPOTIFY_CLIENT_ID}:${secret}`);
-  const res = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
+  const basic = btoa(SPOTIFY_CLIENT_ID + ":" + secret);
+  const res = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
     headers: {
-      'Authorization': `Basic ${basic}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
+      "Authorization": "Basic " + basic,
+      "Content-Type": "application/x-www-form-urlencoded",
     },
-    body: 'grant_type=client_credentials',
+    body: "grant_type=client_credentials",
   });
   if (!res.ok) {
-    throw new Error(`spotify auth failed: ${res.status}`);
+    throw new Error("spotify auth failed: " + res.status);
   }
   const data = await res.json();
   cachedToken = {
@@ -46,129 +44,132 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.token;
 }
 
-// Pitch-class → Camelot map. Spotify returns key 0..11 (C..B) and mode
-// 0 (minor) or 1 (major).
-//                  C   C#  D   D#  E   F   F#  G   G#  A   A#  B
-const MAJOR = ['8B','3B','10B','5B','12B','7B','2B','9B','4B','11B','6B','1B'];
-const MINOR = ['5A','12A','7A','2A','9A','4A','11A','6A','1A','8A','3A','10A'];
+const MAJOR = ["8B","3B","10B","5B","12B","7B","2B","9B","4B","11B","6B","1B"];
+const MINOR = ["5A","12A","7A","2A","9A","4A","11A","6A","1A","8A","3A","10A"];
 
-function toCamelot(key: number, mode: number): string | null {
-  if (key < 0 || key > 11) return null;
+function toCamelot(key, mode) {
+  if (typeof key !== "number" || key < 0 || key > 11) return null;
   return mode === 1 ? MAJOR[key] : MINOR[key];
 }
 
-// Strip parens, "feat." etc. to improve Spotify search hit rate.
-function cleanTitle(s: string): string {
-  return s
-    .replace(/\s*\([^)]*\)/g, ' ')
-    .replace(/\s*\[[^\]]*\]/g, ' ')
-    .replace(/\bfeat\.?\b.*$/i, ' ')
-    .replace(/\bft\.?\b.*$/i, ' ')
-    .replace(/\s+/g, ' ')
+function cleanTitle(s) {
+  return String(s)
+    .replace(/\s*\([^)]*\)/g, " ")
+    .replace(/\s*\[[^\]]*\]/g, " ")
+    .replace(/\bfeat\.?\b.*$/i, " ")
+    .replace(/\bft\.?\b.*$/i, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-function cleanArtist(s: string): string {
-  // Take first artist if "A & B" / "A, B" / "A feat. B".
-  return s
-    .split(/\s*(?:&|,|feat\.?|ft\.?|and)\s+/i)[0]
-    .trim();
+function cleanArtist(s) {
+  return String(s).split(/\s*(?:&|,|feat\.?|ft\.?|and)\s+/i)[0].trim();
+}
+
+function jsonResponse(obj, status) {
+  return new Response(JSON.stringify(obj), {
+    status: status || 200,
+    headers: Object.assign({}, CORS, { "content-type": "application/json" }),
+  });
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: CORS });
+  }
 
   const url = new URL(req.url);
-  const artistRaw = url.searchParams.get('artist') || '';
-  const titleRaw  = url.searchParams.get('title')  || '';
+  const artistRaw = url.searchParams.get("artist") || "";
+  const titleRaw = url.searchParams.get("title") || "";
   if (!artistRaw || !titleRaw) {
-    return new Response(JSON.stringify({ error: 'missing artist or title' }), {
-      status: 400,
-      headers: { ...CORS, 'content-type': 'application/json' },
-    });
+    return jsonResponse({ error: "missing artist or title" }, 400);
   }
 
   const artist = cleanArtist(artistRaw);
-  const title  = cleanTitle(titleRaw);
+  const title = cleanTitle(titleRaw);
 
   try {
     const token = await getAccessToken();
 
-    // 1. Search for the track.
-    const q = `track:${title} artist:${artist}`;
-    const searchUrl = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=5`;
-    const sr = await fetch(searchUrl, { headers: { Authorization: `Bearer ${token}` } });
+    const q = "track:" + title + " artist:" + artist;
+    const searchUrl = "https://api.spotify.com/v1/search?q=" +
+      encodeURIComponent(q) + "&type=track&limit=5";
+    const sr = await fetch(searchUrl, {
+      headers: { "Authorization": "Bearer " + token },
+    });
     if (!sr.ok) {
-      return new Response(JSON.stringify({ error: 'spotify search failed', status: sr.status }), {
-        status: 502,
-        headers: { ...CORS, 'content-type': 'application/json' },
-      });
+      return jsonResponse({ error: "spotify search failed", status: sr.status }, 502);
     }
     const sdata = await sr.json();
-    const items = sdata.tracks?.items || [];
+    const items = (sdata.tracks && sdata.tracks.items) || [];
     if (!items.length) {
-      return new Response(JSON.stringify({ bpm: null, key: null, matched: false }), {
-        status: 200,
-        headers: { ...CORS, 'content-type': 'application/json' },
-      });
+      return jsonResponse({ bpm: null, key: null, matched: false });
     }
 
-    // 2. Pick the best match: prefer exact-ish artist+title match; fall
-    //    back to first result. Also de-prioritize "remix"/"live"/etc.
     const lowArtist = artist.toLowerCase();
-    const lowTitle  = title.toLowerCase();
-    const altWords = ['remix','live','karaoke','cover','instrumental','acoustic','demo','edit'];
-    const wantsAlt = altWords.some(w => lowTitle.includes(w));
-    const scored = items.map((it: any) => {
-      const name = (it.name || '').toLowerCase();
-      const artNames = (it.artists || []).map((a: any) => (a.name || '').toLowerCase());
-      let s = 0;
-      if (artNames.some((n: string) => n === lowArtist)) s += 50;
-      else if (artNames.some((n: string) => n.includes(lowArtist) || lowArtist.includes(n))) s += 30;
-      if (name === lowTitle) s += 30;
-      else if (name.includes(lowTitle) || lowTitle.includes(name)) s += 18;
-      if (!wantsAlt) for (const w of altWords) if (name.includes(w)) { s -= 15; break; }
-      s += Math.min(20, Math.floor((it.popularity || 0) / 5));
-      return { it, s };
-    }).sort((a: any, b: any) => b.s - a.s);
-    const best = scored[0].it;
-    if (!best) {
-      return new Response(JSON.stringify({ bpm: null, key: null, matched: false }), {
-        status: 200,
-        headers: { ...CORS, 'content-type': 'application/json' },
-      });
+    const lowTitle = title.toLowerCase();
+    const altWords = ["remix","live","karaoke","cover","instrumental","acoustic","demo","edit"];
+    let wantsAlt = false;
+    for (let i = 0; i < altWords.length; i++) {
+      if (lowTitle.indexOf(altWords[i]) !== -1) { wantsAlt = true; break; }
     }
 
-    // 3. Audio features.
-    const afUrl = `https://api.spotify.com/v1/audio-features/${best.id}`;
-    const afr = await fetch(afUrl, { headers: { Authorization: `Bearer ${token}` } });
+    const scored = items.map(function (it) {
+      const name = String(it.name || "").toLowerCase();
+      const artNames = (it.artists || []).map(function (a) {
+        return String(a.name || "").toLowerCase();
+      });
+      let s = 0;
+      let exactArtist = false;
+      let partialArtist = false;
+      for (let i = 0; i < artNames.length; i++) {
+        const n = artNames[i];
+        if (n === lowArtist) { exactArtist = true; break; }
+        if (n.indexOf(lowArtist) !== -1 || lowArtist.indexOf(n) !== -1) partialArtist = true;
+      }
+      if (exactArtist) s += 50;
+      else if (partialArtist) s += 30;
+      if (name === lowTitle) s += 30;
+      else if (name.indexOf(lowTitle) !== -1 || lowTitle.indexOf(name) !== -1) s += 18;
+      if (!wantsAlt) {
+        for (let i = 0; i < altWords.length; i++) {
+          if (name.indexOf(altWords[i]) !== -1) { s -= 15; break; }
+        }
+      }
+      s += Math.min(20, Math.floor((it.popularity || 0) / 5));
+      return { it: it, s: s };
+    });
+    scored.sort(function (a, b) { return b.s - a.s; });
+    const best = scored[0] && scored[0].it;
+    if (!best) {
+      return jsonResponse({ bpm: null, key: null, matched: false });
+    }
+
+    const afUrl = "https://api.spotify.com/v1/audio-features/" + best.id;
+    const afr = await fetch(afUrl, {
+      headers: { "Authorization": "Bearer " + token },
+    });
     if (!afr.ok) {
-      return new Response(JSON.stringify({
+      return jsonResponse({
         bpm: null, key: null, matched: true,
         spotifyId: best.id, trackName: best.name,
-        error: 'audio-features failed', status: afr.status,
-      }), {
-        status: 200,
-        headers: { ...CORS, 'content-type': 'application/json' },
+        error: "audio-features failed", status: afr.status,
       });
     }
     const af = await afr.json();
-    const bpm = Number.isFinite(af.tempo) && af.tempo > 0 ? Math.round(af.tempo) : null;
+    const tempo = af.tempo;
+    const bpm = typeof tempo === "number" && tempo > 0 ? Math.round(tempo) : null;
     const key = toCamelot(af.key, af.mode);
 
-    return new Response(JSON.stringify({
-      bpm, key, matched: true,
+    return jsonResponse({
+      bpm: bpm,
+      key: key,
+      matched: true,
       spotifyId: best.id,
       trackName: best.name,
-      trackArtist: (best.artists || []).map((a: any) => a.name).join(', '),
-    }), {
-      status: 200,
-      headers: { ...CORS, 'content-type': 'application/json' },
+      trackArtist: (best.artists || []).map(function (a) { return a.name; }).join(", "),
     });
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
-      status: 500,
-      headers: { ...CORS, 'content-type': 'application/json' },
-    });
+    return jsonResponse({ error: String(e && e.message ? e.message : e) }, 500);
   }
 });
