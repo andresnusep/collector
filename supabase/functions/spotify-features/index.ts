@@ -1,8 +1,13 @@
-// Supabase Edge Function: artist+title -> MusicBrainz (MBID) -> AcousticBrainz (BPM + key).
-// Returns { bpm, key } where key is Camelot notation.
+// Supabase Edge Function: artist+title -> { bpm, key } (Camelot).
 //
-// MusicBrainz:  https://musicbrainz.org/ws/2/recording (1 req/sec, needs User-Agent)
-// AcousticBrainz: https://acousticbrainz.org/api/v1/{mbid}/low-level (no auth, archived but data lives)
+// Two-stage lookup:
+//   1. MusicBrainz (MBID) -> AcousticBrainz (BPM + key). Free, no attribution.
+//   2. Fallback to GetSongBPM when AcousticBrainz has no data for any MBID.
+//      GetSongBPM requires attribution — client shows a backlink in the Analyze modal.
+//
+// MusicBrainz:    https://musicbrainz.org/ws/2/recording (1 req/sec, needs User-Agent)
+// AcousticBrainz: https://acousticbrainz.org/api/v1/{mbid}/low-level (archived, coverage spotty)
+// GetSongBPM:     https://api.getsongbpm.com/search (requires GETSONGBPM_KEY secret)
 //
 // Name says "spotify-features" for legacy reasons — the client still calls this URL.
 
@@ -88,6 +93,38 @@ async function acousticBrainzLookup(mbid) {
   return { bpm: bpm, key: key };
 }
 
+// GetSongBPM fallback. Returns { bpm, key } or null. `key_of` from GetSongBPM
+// is a note name like "C", "F#m", "Bbm" — convert to Camelot.
+async function getSongBpmLookup(artist, title) {
+  const apiKey = Deno.env.get("GETSONGBPM_KEY");
+  if (!apiKey) return null;
+  const lookup = "song:" + title + "+artist:" + artist;
+  const url = "https://api.getsongbpm.com/search/?api_key=" +
+    encodeURIComponent(apiKey) + "&type=both&lookup=" + encodeURIComponent(lookup);
+  const res = await fetch(url);
+  if (!res.ok) return null;
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("application/json")) return null; // HTML error page
+  const data = await res.json();
+  const hit = Array.isArray(data.search) ? data.search[0] : null;
+  if (!hit) return null;
+  const bpmRaw = Number(hit.tempo);
+  const bpm = Number.isFinite(bpmRaw) && bpmRaw > 0 ? Math.round(bpmRaw) : null;
+  const key = noteToCamelot(hit.key_of);
+  return { bpm: bpm, key: key };
+}
+
+// Parse "C", "Am", "F#m", "Bb" -> Camelot. Also passes through existing Camelot ("5A").
+function noteToCamelot(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (/^([1-9]|1[0-2])[AB]$/i.test(s)) return s.toUpperCase();
+  const m = s.match(/^([A-Ga-g][#b]?)\s*(m|min|minor)?$/);
+  if (!m) return null;
+  const note = m[1][0].toUpperCase() + m[1].slice(1);
+  return toCamelot(note, m[2] ? "minor" : "major");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: CORS });
@@ -106,37 +143,48 @@ Deno.serve(async (req) => {
   try {
     // Step 1: find MBIDs on MusicBrainz.
     const candidates = await musicBrainzSearch(artist, title);
-    if (!candidates.length) {
-      return jsonResponse({ bpm: null, key: null, matched: false, source: "musicbrainz:miss" });
-    }
 
     // Step 2: walk candidates until one has AcousticBrainz data with at least BPM.
-    for (let i = 0; i < Math.min(candidates.length, 5); i++) {
-      const c = candidates[i];
-      const ab = await acousticBrainzLookup(c.id);
-      if (ab && ab.bpm != null) {
-        return jsonResponse({
-          bpm: ab.bpm,
-          key: ab.key,
-          matched: true,
-          source: "acousticbrainz",
-          mbid: c.id,
-          trackName: c.title,
-          trackArtist: c.artist,
-          mbScore: c.score,
-        });
+    if (candidates.length) {
+      for (let i = 0; i < Math.min(candidates.length, 5); i++) {
+        const c = candidates[i];
+        const ab = await acousticBrainzLookup(c.id);
+        if (ab && ab.bpm != null) {
+          return jsonResponse({
+            bpm: ab.bpm,
+            key: ab.key,
+            matched: true,
+            source: "acousticbrainz",
+            mbid: c.id,
+            trackName: c.title,
+            trackArtist: c.artist,
+            mbScore: c.score,
+          });
+        }
       }
     }
 
-    // MBIDs found but none had AcousticBrainz features.
+    // Step 3: fallback to GetSongBPM.
+    const gs = await getSongBpmLookup(artist, title);
+    if (gs && gs.bpm != null) {
+      return jsonResponse({
+        bpm: gs.bpm,
+        key: gs.key,
+        matched: true,
+        source: "getsongbpm",
+      });
+    }
+
+    // Nothing worked.
+    const source = candidates.length ? "all:no-features" : "all:miss";
     return jsonResponse({
       bpm: null,
       key: null,
-      matched: true,
-      source: "acousticbrainz:no-features",
-      mbid: candidates[0].id,
-      trackName: candidates[0].title,
-      trackArtist: candidates[0].artist,
+      matched: candidates.length > 0,
+      source: source,
+      mbid: candidates.length ? candidates[0].id : undefined,
+      trackName: candidates.length ? candidates[0].title : undefined,
+      trackArtist: candidates.length ? candidates[0].artist : undefined,
     });
   } catch (e) {
     return jsonResponse({ error: String(e && e.message ? e.message : e) }, 500);
