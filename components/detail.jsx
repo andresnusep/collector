@@ -1,11 +1,28 @@
 // Record detail drawer — track-level add to set
 
-function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, onRateTrack, onRefreshDiscogs }) {
+function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, onRateTrack, onRefreshTrackBpm, onRefreshDiscogs }) {
   const [playing, setPlaying] = React.useState(null);
   const [progress, setProgress] = React.useState({});
   const [audioMap, setAudioMap] = React.useState({}); // trackId -> object URL
   const [previewMap, setPreviewMap] = React.useState({}); // trackId -> iTunes preview URL
+  const [bpmRefreshing, setBpmRefreshing] = React.useState({}); // trackIndex -> bool
+  const [bpmMissed, setBpmMissed] = React.useState({}); // trackIndex -> bool (one-shot flash)
   const audioRef = React.useRef(null);
+
+  const handleRefreshBpm = async (trackIndex) => {
+    if (!onRefreshTrackBpm || bpmRefreshing[trackIndex]) return;
+    setBpmRefreshing(m => ({ ...m, [trackIndex]: true }));
+    setBpmMissed(m => ({ ...m, [trackIndex]: false }));
+    try {
+      const result = await onRefreshTrackBpm(record.id, trackIndex);
+      if (!result || (result.bpm == null && !result.key)) {
+        setBpmMissed(m => ({ ...m, [trackIndex]: true }));
+        setTimeout(() => setBpmMissed(m => ({ ...m, [trackIndex]: false })), 2000);
+      }
+    } finally {
+      setBpmRefreshing(m => ({ ...m, [trackIndex]: false }));
+    }
+  };
 
   // Load which tracks have uploaded audio for this record
   const refreshAudio = React.useCallback(async () => {
@@ -100,6 +117,7 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
     }}>
       <style>{`
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes cs-spin { to { transform: rotate(360deg); } }
       `}</style>
       <audio ref={audioRef} style={{ display: 'none' }} preload="none" />
       <div style={{
@@ -263,6 +281,32 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
                   <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                     <BpmBadge bpm={t.bpm} size={10} />
                     <KeyBadge k={t.key} size={9} />
+                    {onRefreshTrackBpm && (
+                      <button
+                        onClick={() => handleRefreshBpm(i)}
+                        disabled={bpmRefreshing[i]}
+                        title={bpmMissed[i] ? 'No data found' : 'Refresh BPM & key'}
+                        style={{
+                          width: 18, height: 18, borderRadius: 9, border: 'none',
+                          background: bpmMissed[i] ? 'color-mix(in oklab, #E74C5C 25%, transparent)' : 'transparent',
+                          color: bpmMissed[i] ? '#E74C5C' : 'var(--dim)',
+                          cursor: bpmRefreshing[i] ? 'wait' : 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          padding: 0, transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={e => { if (!bpmRefreshing[i] && !bpmMissed[i]) e.currentTarget.style.color = 'var(--accent)'; }}
+                        onMouseLeave={e => { if (!bpmRefreshing[i] && !bpmMissed[i]) e.currentTarget.style.color = 'var(--dim)'; }}
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+                          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                          style={{
+                            animation: bpmRefreshing[i] ? 'cs-spin 0.8s linear infinite' : 'none',
+                          }}>
+                          <path d="M21 12a9 9 0 1 1-3-6.7" />
+                          <polyline points="21 3 21 9 15 9" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                   <div style={{
                     fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'var(--dim)',

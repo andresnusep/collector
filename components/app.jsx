@@ -180,6 +180,19 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     }));
   };
 
+  // Per-track BPM/key refresh. Looks up the single track via the edge function
+  // and applies the result through the same pipeline as bulk analysis.
+  const refreshTrackBpm = async (recordId, trackIndex) => {
+    const rec = records.find(r => r.id === recordId);
+    if (!rec) return null;
+    const t = rec.tracks[trackIndex];
+    if (!t) return null;
+    const result = await window.lookupGetSongBpm(rec.artist, t.title || rec.title);
+    if (!result || (result.bpm == null && !result.key)) return null;
+    applyAnalysis({ [recordId]: [{ trackIndex, bpm: result.bpm, key: result.key }] });
+    return result;
+  };
+
   const rateTrack = (recordId, trackIndex, rating) => {
     setRecords(cur => cur.map(r => {
       if (r.id !== recordId) return r;
@@ -568,6 +581,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
             crates={crates} onAddToCrate={addToCrate} onRemoveFromCrate={removeFromCrate}
             onNewCrate={newCrate}
             onRateTrack={rateTrack}
+            onRefreshTrackBpm={refreshTrackBpm}
             onRefreshDiscogs={refreshDiscogsRecord} />
         )}
       </div>
@@ -733,7 +747,7 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
         <span style={{ flex: 1 }}>Add record</span>
       </button>
       <button onClick={onOpenImport} style={{
-        marginBottom: 6, padding: '10px 12px',
+        marginBottom: 10, padding: '10px 12px',
         background: 'transparent', color: 'var(--fg)',
         border: '1px dashed var(--border)', borderRadius: 8,
         cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
@@ -743,18 +757,6 @@ function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpe
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--fg)'; }}>
         {Icon.Discogs}
         <span style={{ flex: 1 }}>Import from Discogs</span>
-      </button>
-      <button onClick={onAnalyze} style={{
-        marginBottom: 10, padding: '10px 12px',
-        background: 'transparent', color: 'var(--fg)',
-        border: '1px solid var(--border)', borderRadius: 8,
-        cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-        display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left',
-      }}
-      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--fg)'; }}>
-        {Icon.Search}
-        <span style={{ flex: 1 }}>Analyze BPM &amp; key</span>
       </button>
 
       {/* Collection stats */}
