@@ -372,17 +372,18 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     autoAnalyzeRunning.current = true;
     let cancelled = false;
     (async () => {
-      const apiKey = localStorage.getItem('cs-gsbpm-key') || '92947fe415c8cddf9b400174476de981';
       const results = {};
       for (const t of targets) {
         if (cancelled) break;
         try {
-          const r = await window.lookupGetSongBpm(t.artist, t.title, apiKey);
+          const r = await window.lookupGetSongBpm(t.artist, t.title);
           (results[t.rid] ||= []).push({ trackIndex: t.idx, ...(r || {}) });
         } catch {
           (results[t.rid] ||= []).push({ trackIndex: t.idx });
         }
-        await new Promise(res => setTimeout(res, 250)); // throttle
+        // Respect MusicBrainz 1 req/sec limit (edge function's first hop).
+        // 1.1s gives us a small safety margin for cold-start latency.
+        await new Promise(res => setTimeout(res, 1100));
       }
       if (cancelled) return;
       setRecords(cur => cur.map(rec => {
