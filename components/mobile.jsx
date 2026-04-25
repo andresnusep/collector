@@ -426,64 +426,6 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
         }}>Cue next →</button>
       </div>
 
-      {suggestions.length > 0 && (
-        <>
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
-            textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
-          }}>Mix suggestions · from this set</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
-            {suggestions.map(s => {
-              const harm = s.keyPenalty === 0 ? 'same key'
-                : s.keyPenalty === 1 ? 'harmonic'
-                : s.keyPenalty <= 2 ? 'close' : 'clash';
-              const tag = s.bpmDiff === 0 ? 'exact BPM'
-                : `±${s.bpmDiff} BPM`;
-              const good = s.bpmDiff <= 4 && s.keyPenalty <= 1;
-              return (
-                <button key={s.tid} onClick={() => onJumpTo && onJumpTo(s.qIdx)} style={{
-                  display: 'flex', gap: 10, alignItems: 'center', padding: 10,
-                  borderRadius: 10, background: soft,
-                  border: `1px solid ${good ? accent : border}`,
-                  color: fg, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
-                  width: '100%',
-                }}>
-                  <RecordCover hue={s.record.cover.hue} shape={s.record.cover.shape}
-                    imageUrl={s.record.cover.image}
-                    title={s.record.title} artist={s.record.artist} size={42}
-                    style={{ width: 42, height: 42, borderRadius: 4, flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {s.track.n && (
-                      <div style={{
-                        fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5,
-                        fontWeight: 700, letterSpacing: 1,
-                        color: accent, marginBottom: 1,
-                      }}>{s.track.n}</div>
-                    )}
-                    <div style={{ fontSize: 12, fontWeight: 600,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.track.title}
-                    </div>
-                    <div style={{ fontSize: 10, opacity: 0.6,
-                      fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3 }}>
-                      {tag} · {harm}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 14, fontWeight: 700, color: good ? accent : fg }}>
-                      {s.track.bpm}
-                    </div>
-                    <div style={{ fontFamily: 'JetBrains Mono, monospace',
-                      fontSize: 9, opacity: 0.65 }}>{s.track.key ?? '—'}</div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
-
       {upNext.length > 0 && (
         <>
           <div style={{
@@ -491,7 +433,7 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
             textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
           }}>Up next</div>
           <div style={{
-            display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 16,
+            display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18,
           }}>
             {upNext.map((u, k) => (
               <div key={u.tid} onClick={() => onJumpTo && onJumpTo(u.qIdx)} style={{
@@ -544,6 +486,64 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
                   accent={accent} fg={fg} border={border} />
               </div>
             ))}
+          </div>
+        </>
+      )}
+
+      {suggestions.length > 0 && (
+        <>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
+          }}>Mix suggestions · from this set</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 16 }}>
+            {suggestions.map(s => {
+              const harm = s.keyPenalty === 0 ? 'same key'
+                : s.keyPenalty === 1 ? 'harmonic'
+                : s.keyPenalty <= 2 ? 'close' : 'clash';
+              const tag = s.bpmDiff === 0 ? 'exact BPM'
+                : `±${s.bpmDiff} BPM`;
+              const good = s.bpmDiff <= 4 && s.keyPenalty <= 1;
+              return (
+                <button key={s.tid} onClick={() => onJumpTo && onJumpTo(s.qIdx)} style={{
+                  display: 'flex', gap: 10, alignItems: 'center', padding: 10,
+                  borderRadius: 10, background: soft,
+                  border: `1px solid ${good ? accent : border}`,
+                  color: fg, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+                  width: '100%',
+                }}>
+                  <RecordCover hue={s.record.cover.hue} shape={s.record.cover.shape}
+                    imageUrl={s.record.cover.image}
+                    title={s.record.title} artist={s.record.artist} size={42}
+                    style={{ width: 42, height: 42, borderRadius: 4, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {s.track.n && (
+                      <div style={{
+                        fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5,
+                        fontWeight: 700, letterSpacing: 1,
+                        color: accent, marginBottom: 1,
+                      }}>{s.track.n}</div>
+                    )}
+                    <div style={{ fontSize: 12, fontWeight: 600,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.track.title}
+                    </div>
+                    <div style={{ fontSize: 10, opacity: 0.6,
+                      fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3 }}>
+                      {tag} · {harm}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 14, fontWeight: 700, color: good ? accent : fg }}>
+                      {s.track.bpm}
+                    </div>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace',
+                      fontSize: 9, opacity: 0.65 }}>{s.track.key ?? '—'}</div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </>
       )}
