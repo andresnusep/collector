@@ -712,7 +712,7 @@ function Sidebar({ view, setView, set, records, onOpenImport, onAddRecord, onAna
       <div style={{ marginBottom: 18 }}>
         <img src="kollectorlogo.png" alt="Kollector Studio"
           className="brand-logo"
-          style={{ width: '100%', maxWidth: 180, height: 'auto', display: 'block' }} />
+          style={{ maxWidth: 120, width: '70%', height: 'auto', display: 'block' }} />
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
           textTransform: 'uppercase', color: 'var(--dim)', marginTop: 8,
