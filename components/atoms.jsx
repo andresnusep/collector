@@ -128,4 +128,26 @@ const Icon = {
   User: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
 };
 
-Object.assign(window, { Tag, KeyBadge, BpmBadge, EnergyDots, Waveform, IconButton, Icon });
+// Camelot harmonic distance: 0 = same key, 1 = adjacent on wheel or relative
+// major/minor, 2+ = further / clashing. Null keys get a neutral penalty so
+// records with unknown keys aren't ranked as "perfectly harmonic".
+function camelotDistance(a, b) {
+  if (!a || !b) return 3;
+  const parse = (k) => {
+    const m = String(k).trim().match(/^(\d{1,2})([AB])$/i);
+    if (!m) return null;
+    return { n: parseInt(m[1], 10), ab: m[2].toUpperCase() };
+  };
+  const pa = parse(a), pb = parse(b);
+  if (!pa || !pb) return 3;
+  if (pa.n === pb.n && pa.ab === pb.ab) return 0;
+  // Relative major/minor: same number, different letter
+  if (pa.n === pb.n) return 1;
+  // Circle distance (1..12 wrap)
+  let d = Math.abs(pa.n - pb.n);
+  if (d > 6) d = 12 - d;
+  // Same letter family gets lower penalty than cross-family jumps
+  return pa.ab === pb.ab ? d : d + 1;
+}
+
+Object.assign(window, { Tag, KeyBadge, BpmBadge, EnergyDots, Waveform, IconButton, Icon, camelotDistance });

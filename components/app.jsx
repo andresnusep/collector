@@ -193,6 +193,31 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     return result;
   };
 
+  // Album-level BPM refresh. Walks every track that's missing BPM and calls
+  // the per-track lookup sequentially with a 1.1s throttle to stay under
+  // MusicBrainz's 1 req/s limit. Returns { hits, fails } and reports progress
+  // through onProgress(done, total).
+  const refreshAlbumBpms = async (record, onProgress) => {
+    const missingIdx = record.tracks
+      .map((t, i) => (t.bpm == null ? i : -1))
+      .filter(i => i >= 0);
+    if (missingIdx.length === 0) return { hits: 0, fails: 0 };
+    let hits = 0, fails = 0;
+    for (let k = 0; k < missingIdx.length; k++) {
+      const i = missingIdx[k];
+      try {
+        const r = await refreshTrackBpm(record.id, i);
+        if (r && r.bpm != null) hits++; else fails++;
+      } catch {
+        fails++;
+      }
+      onProgress && onProgress(k + 1, missingIdx.length);
+      // Throttle between requests (last one can skip the wait).
+      if (k < missingIdx.length - 1) await new Promise(r => setTimeout(r, 1100));
+    }
+    return { hits, fails };
+  };
+
   const rateTrack = (recordId, trackIndex, rating) => {
     setRecords(cur => cur.map(r => {
       if (r.id !== recordId) return r;
@@ -451,6 +476,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           onSaveSet={saveCurrentSet}
           onToggleTrack={toggleTrack}
           onRemoveFromSet={removeFromSet}
+          onReorderSet={reorder}
           onClearSet={() => setSet([])}
           onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
           profile={profile} setProfile={setProfile}
@@ -583,7 +609,8 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
             onNewCrate={newCrate}
             onRateTrack={rateTrack}
             onRefreshTrackBpm={refreshTrackBpm}
-            onRefreshDiscogs={refreshDiscogsRecord} />
+            onRefreshDiscogs={refreshDiscogsRecord}
+            onRefreshAlbumBpms={refreshAlbumBpms} />
         )}
       </div>
 
@@ -618,6 +645,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               onSaveSet={saveCurrentSet}
               onToggleTrack={toggleTrack}
               onRemoveFromSet={removeFromSet}
+              onReorderSet={reorder}
               onClearSet={() => setSet([])}
               onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
               profile={profile} setProfile={setProfile}
@@ -639,6 +667,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       )}
 
       <DiscogsImportModal open={importOpen}
+        existingRecords={records}
         onClose={() => setImportOpen(false)}
         onImport={handleDiscogsImport} />
 
@@ -656,6 +685,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           return p ? { tid, ...p } : null;
         }).filter(Boolean);
         return <GigMode resolved={resolved}
+          theme={tweaks.theme} accent={ACCENTS[tweaks.accent] || tweaks.accent}
           onClose={() => { setGigMode(false); setGigResolved(null); }} />;
       })()}
     </div>

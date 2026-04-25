@@ -298,10 +298,12 @@ function SectionHeader({ children }) {
 
 // ─────────── Gig mode ───────────
 
-function GigMode({ resolved, onClose }) {
+function GigMode({ resolved, theme, accent, onClose }) {
   const [index, setIndex] = React.useState(0);
   const [elapsed, setElapsed] = React.useState(0);
   const [running, setRunning] = React.useState(false);
+
+  const accentColor = accent || '#E8FF4A';
 
   React.useEffect(() => {
     const onKey = (e) => {
@@ -309,11 +311,11 @@ function GigMode({ resolved, onClose }) {
       if (e.key === ' ') { e.preventDefault(); setRunning(r => !r); }
       if (e.key === 'ArrowRight') setIndex(i => Math.min(resolved.length - 1, i + 1));
       if (e.key === 'ArrowLeft') setIndex(i => Math.max(0, i - 1));
-      if (e.key === 'n') next();
+      if (e.key === 'n') setIndex(i => Math.min(resolved.length - 1, i + 1));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [resolved.length]);
+  }, [resolved.length, onClose]);
 
   React.useEffect(() => {
     if (!running) return;
@@ -335,40 +337,61 @@ function GigMode({ resolved, onClose }) {
   const next = () => setIndex(i => Math.min(resolved.length - 1, i + 1));
   const prev = () => setIndex(i => Math.max(0, i - 1));
 
+  // Mix suggestions: best BPM/key matches from the rest of the set.
+  // Score = bpmDiff * 2 + keyPenalty — same weighting as the phone Gig view.
+  const suggestions = React.useMemo(() => {
+    if (resolved.length < 2) return [];
+    const cur = resolved[index];
+    if (!cur || cur.track.bpm == null) return [];
+    const pool = resolved
+      .map((q, i) => ({ ...q, qIdx: i }))
+      .filter((q, i) => i !== index && i !== index + 1 && q.track.bpm != null);
+    const cd = window.camelotDistance || (() => 3);
+    const scored = pool.map(q => {
+      const bpmDiff = Math.abs(q.track.bpm - cur.track.bpm);
+      const keyPenalty = cd(cur.track.key, q.track.key);
+      return { ...q, bpmDiff, keyPenalty, score: bpmDiff * 2 + keyPenalty };
+    });
+    scored.sort((a, b) => a.score - b.score);
+    return scored.slice(0, 3);
+  }, [resolved, index]);
+
   if (resolved.length === 0) return null;
   const cur = resolved[index];
   const nxt = resolved[index + 1];
+  // Up to 3 upcoming tracks (like the phone view), including the immediate next.
+  const upcoming = resolved.slice(index + 1, index + 4);
   const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-  const [m, s] = (cur.track.len || '0:00').split(':').map(Number);
-  const totalSec = (m || 0) * 60 + (s || 0);
+  const [mm, ss] = (cur.track.len || '0:00').split(':').map(Number);
+  const totalSec = (mm || 0) * 60 + (ss || 0);
   const pct = totalSec ? Math.min(100, (elapsed / totalSec) * 100) : 0;
 
   return (
-    <div style={{
+    <div className={`app ${theme || 'dark'}`} style={{
       position: 'fixed', inset: 0, zIndex: 300,
-      background: '#0E0C0A', color: '#F4EFE6',
+      background: 'var(--bg)', color: 'var(--fg)',
       display: 'flex', flexDirection: 'column',
       fontFamily: 'Space Grotesk, sans-serif',
     }}>
       {/* Top bar */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '16px 24px', borderBottom: '1px solid rgba(244,239,230,0.1)',
+        padding: '16px 24px', borderBottom: '1px solid var(--border)',
       }}>
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: 2,
-          textTransform: 'uppercase', color: 'rgba(244,239,230,0.55)',
+          textTransform: 'uppercase', color: 'var(--dim)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <span style={{ width: 8, height: 8, borderRadius: 4, background: '#E8FF4A',
+          <span style={{ width: 8, height: 8, borderRadius: 4, background: accentColor,
             animation: 'gigPulse 1.5s infinite' }} />
           <style>{`@keyframes gigPulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.3 } }`}</style>
           Gig mode · Track {index + 1} of {resolved.length}
         </div>
         <button onClick={onClose} style={{
           padding: '8px 16px', background: 'transparent',
-          border: '1px solid rgba(244,239,230,0.2)', borderRadius: 6,
-          color: '#F4EFE6', cursor: 'pointer',
+          border: '1px solid var(--border)', borderRadius: 6,
+          color: 'var(--fg)', cursor: 'pointer',
           fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
           letterSpacing: 1, textTransform: 'uppercase',
         }}>Exit · ESC</button>
@@ -376,95 +399,160 @@ function GigMode({ resolved, onClose }) {
 
       {/* Main area */}
       <div style={{
-        flex: 1, display: 'grid', gridTemplateColumns: '1fr 420px',
+        flex: 1, display: 'grid', gridTemplateColumns: '1fr 440px',
         overflow: 'hidden',
       }}>
         {/* Current track */}
         <div style={{
           padding: 60, display: 'flex', flexDirection: 'column', justifyContent: 'center',
+          minWidth: 0,
         }}>
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: 2,
-            textTransform: 'uppercase', color: '#E8FF4A', marginBottom: 12,
+            textTransform: 'uppercase', color: accentColor, marginBottom: 12,
           }}>Now playing</div>
+
+          {cur.track.n && (
+            <div style={{
+              display: 'inline-block', alignSelf: 'flex-start',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 14, fontWeight: 700,
+              letterSpacing: 2, padding: '5px 12px', borderRadius: 5,
+              background: accentColor, color: 'var(--on-accent)', marginBottom: 14,
+            }}>{cur.track.n}</div>
+          )}
           <div style={{
             fontSize: 84, fontWeight: 800, letterSpacing: -3, lineHeight: 1,
             marginBottom: 14, textWrap: 'balance',
           }}>
             {cur.track.title}
           </div>
-          <div style={{ fontSize: 28, color: 'rgba(244,239,230,0.7)', marginBottom: 32 }}>
+          <div style={{ fontSize: 28, color: 'var(--dim)', marginBottom: 32 }}>
             {cur.record.artist}
           </div>
           <div style={{ display: 'flex', gap: 32, marginBottom: 32 }}>
-            <GigStat label="BPM" value={cur.track.bpm ?? '—'} />
-            <GigStat label="Key" value={cur.track.key ?? '—'} />
-            <GigStat label="Length" value={cur.track.len} />
-            <GigStat label="Elapsed" value={fmtTime(elapsed)} accent={running} />
+            <GigStat label="BPM" value={cur.track.bpm ?? '—'} accentColor={accentColor} />
+            <GigStat label="Key" value={cur.track.key ?? '—'} accentColor={accentColor} />
+            <GigStat label="Length" value={cur.track.len} accentColor={accentColor} />
+            <GigStat label="Elapsed" value={fmtTime(elapsed)} accentColor={accentColor} highlighted={running} />
           </div>
           {/* Progress bar */}
           <div style={{
-            height: 6, background: 'rgba(244,239,230,0.1)', borderRadius: 3, overflow: 'hidden',
+            height: 6, background: 'var(--hover)', borderRadius: 3, overflow: 'hidden',
             marginBottom: 24,
           }}>
             <div style={{
-              height: '100%', width: `${pct}%`, background: '#E8FF4A',
+              height: '100%', width: `${pct}%`, background: accentColor,
               transition: 'width 0.3s',
             }} />
           </div>
           {/* Controls */}
           <div style={{ display: 'flex', gap: 10 }}>
-            <GigBtn onClick={prev} disabled={index === 0}>← Prev</GigBtn>
-            <GigBtn onClick={() => setRunning(r => !r)} primary>
+            <GigBtn onClick={prev} disabled={index === 0} accentColor={accentColor}>← Prev</GigBtn>
+            <GigBtn onClick={() => setRunning(r => !r)} primary accentColor={accentColor}>
               {running ? 'Pause' : 'Start'} · SPACE
             </GigBtn>
-            <GigBtn onClick={next} disabled={index >= resolved.length - 1}>Next →</GigBtn>
+            <GigBtn onClick={next} disabled={index >= resolved.length - 1} accentColor={accentColor}>Next →</GigBtn>
           </div>
         </div>
 
-        {/* Next up */}
+        {/* Right pane — coming up + mix suggestions */}
         <div style={{
-          padding: 40, borderLeft: '1px solid rgba(244,239,230,0.1)',
-          background: 'rgba(244,239,230,0.02)',
-          display: 'flex', flexDirection: 'column',
+          padding: 32, borderLeft: '1px solid var(--border)',
+          background: 'var(--panel)',
+          display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto',
         }}>
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 2,
-            textTransform: 'uppercase', color: 'rgba(244,239,230,0.55)', marginBottom: 20,
+            textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 16,
           }}>Coming up</div>
+
           {nxt ? (
             <>
-              <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.1,
-                marginBottom: 6 }}>
-                {nxt.track.title}
-              </div>
-              <div style={{ fontSize: 16, color: 'rgba(244,239,230,0.55)', marginBottom: 20 }}>
-                {nxt.record.artist}
-              </div>
-              <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
-                <GigStat label="BPM" value={nxt.track.bpm ?? '—'} small />
-                <GigStat label="Key" value={nxt.track.key ?? '—'} small />
-                <GigStat label="Len" value={nxt.track.len} small />
-              </div>
+              {/* Rich immediate-next card */}
+              <GigNextCard item={nxt} accentColor={accentColor} prominent />
               <TransitionHint
                 fromBpm={cur.track.bpm} toBpm={nxt.track.bpm}
-                fromKey={cur.track.key} toKey={nxt.track.key} />
+                fromKey={cur.track.key} toKey={nxt.track.key}
+                accentColor={accentColor} />
+
+              {/* Next 2 more (to match phone's 3-up list) */}
+              {upcoming.slice(1).length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+                  {upcoming.slice(1).map(u => (
+                    <GigNextCard key={u.tid} item={u} accentColor={accentColor} />
+                  ))}
+                </div>
+              )}
+
+              {/* Mix suggestions — BPM/key scored picks from anywhere in the set */}
+              {suggestions.length > 0 && (
+                <>
+                  <div style={{
+                    fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 2,
+                    textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 10,
+                  }}>Mix suggestions</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 22 }}>
+                    {suggestions.map(s => {
+                      const harm = s.keyPenalty === 0 ? 'same key'
+                        : s.keyPenalty === 1 ? 'harmonic'
+                        : s.keyPenalty <= 2 ? 'close' : 'clash';
+                      const tag = s.bpmDiff === 0 ? 'exact BPM' : `±${s.bpmDiff} BPM`;
+                      const good = s.bpmDiff <= 4 && s.keyPenalty <= 1;
+                      return (
+                        <button key={s.tid} onClick={() => setIndex(s.qIdx)}
+                          title={`Jump to track ${s.qIdx + 1}`}
+                          style={{
+                            display: 'flex', gap: 10, alignItems: 'center', padding: 10,
+                            borderRadius: 8, background: 'var(--hover)',
+                            border: `1px solid ${good ? accentColor : 'var(--border)'}`,
+                            color: 'var(--fg)', fontFamily: 'inherit',
+                            cursor: 'pointer', textAlign: 'left', width: '100%',
+                          }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            {s.track.n && (
+                              <div style={{
+                                fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                                fontWeight: 700, letterSpacing: 1,
+                                color: accentColor, marginBottom: 1,
+                              }}>{s.track.n}</div>
+                            )}
+                            <div style={{ fontSize: 13, fontWeight: 600,
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {s.track.title}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--dim)',
+                              fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3 }}>
+                              {tag} · {harm}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                            <div style={{ fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 16, fontWeight: 700,
+                              color: good ? accentColor : 'var(--fg)' }}>
+                              {s.track.bpm}
+                            </div>
+                            <div style={{ fontFamily: 'JetBrains Mono, monospace',
+                              fontSize: 10, color: 'var(--dim)' }}>{s.track.key ?? '—'}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
               <div style={{ flex: 1 }} />
-              <div style={{
-                fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
-                color: 'rgba(244,239,230,0.4)', textTransform: 'uppercase',
-              }}>Then · {resolved.slice(index + 2, index + 5).length} more tracks</div>
-              {resolved.slice(index + 2, index + 5).map((r, i) => (
-                <div key={i} style={{
-                  fontSize: 13, color: 'rgba(244,239,230,0.55)',
-                  padding: '6px 0', borderBottom: '1px solid rgba(244,239,230,0.06)',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{index + 2 + i + 1}. {r.record.artist} — {r.track.title}</div>
-              ))}
+              {resolved.length > index + upcoming.length && (
+                <div style={{
+                  fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
+                  color: 'var(--dim)', textTransform: 'uppercase',
+                  paddingTop: 10, borderTop: '1px solid var(--border)',
+                }}>{resolved.length - (index + upcoming.length)} more in the set</div>
+              )}
             </>
           ) : (
             <div style={{
-              fontSize: 18, color: 'rgba(244,239,230,0.4)',
+              fontSize: 18, color: 'var(--dim)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               height: '100%', textAlign: 'center',
             }}>
@@ -477,28 +565,28 @@ function GigMode({ resolved, onClose }) {
   );
 }
 
-function GigStat({ label, value, small, accent }) {
+function GigStat({ label, value, small, highlighted, accentColor }) {
   return (
     <div>
       <div style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: small ? 9 : 10, letterSpacing: 1.5,
-        textTransform: 'uppercase', color: 'rgba(244,239,230,0.4)',
+        textTransform: 'uppercase', color: 'var(--dim)',
       }}>{label}</div>
       <div style={{
         fontSize: small ? 22 : 36, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-        color: accent ? '#E8FF4A' : '#F4EFE6',
+        color: highlighted ? accentColor : 'var(--fg)',
       }}>{value}</div>
     </div>
   );
 }
 
-function GigBtn({ onClick, children, primary, disabled }) {
+function GigBtn({ onClick, children, primary, disabled, accentColor }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
       padding: '12px 20px', borderRadius: 6,
-      background: primary ? '#E8FF4A' : 'transparent',
-      color: primary ? '#0E0C0A' : '#F4EFE6',
-      border: primary ? 'none' : '1px solid rgba(244,239,230,0.2)',
+      background: primary ? accentColor : 'transparent',
+      color: primary ? 'var(--on-accent)' : 'var(--fg)',
+      border: primary ? 'none' : '1px solid var(--border)',
       cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.3 : 1,
       fontFamily: 'JetBrains Mono, monospace', fontSize: 12, fontWeight: 700,
       letterSpacing: 1, textTransform: 'uppercase',
@@ -506,7 +594,58 @@ function GigBtn({ onClick, children, primary, disabled }) {
   );
 }
 
-function TransitionHint({ fromBpm, toBpm, fromKey, toKey }) {
+// Rich card for an upcoming track in gig mode — cover + side/number + title + BPM/key.
+function GigNextCard({ item, accentColor, prominent }) {
+  const r = item.record, t = item.track;
+  const size = prominent ? 64 : 48;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 14,
+      padding: prominent ? 14 : 10, borderRadius: 8,
+      background: prominent ? 'var(--hover)' : 'transparent',
+      border: prominent ? '1px solid var(--border)' : '1px solid transparent',
+      marginBottom: prominent ? 14 : 0,
+    }}>
+      <div style={{ flexShrink: 0 }}>
+        <RecordCover hue={r.cover?.hue} shape={r.cover?.shape}
+          imageUrl={r.cover?.image}
+          title={r.title} artist={r.artist} size={size}
+          style={{ width: size, height: size, borderRadius: 4 }} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {t.n && (
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: prominent ? 11 : 9, fontWeight: 700, letterSpacing: 1,
+            color: accentColor, marginBottom: 2,
+          }}>{t.n}</div>
+        )}
+        <div style={{
+          fontSize: prominent ? 20 : 14, fontWeight: 700,
+          letterSpacing: prominent ? -0.4 : 0, lineHeight: 1.15,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{t.title}</div>
+        <div style={{
+          fontSize: prominent ? 13 : 11, color: 'var(--dim)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{r.artist}</div>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace',
+          fontSize: prominent ? 22 : 16, fontWeight: 700,
+          color: accentColor, lineHeight: 1 }}>
+          {t.bpm ?? '—'}
+        </div>
+        <div style={{ fontFamily: 'JetBrains Mono, monospace',
+          fontSize: prominent ? 12 : 10, color: 'var(--dim)', marginTop: 3 }}>
+          {t.key ?? '—'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TransitionHint({ fromBpm, toBpm, fromKey, toKey, accentColor }) {
   const bpmDelta = (fromBpm != null && toBpm != null) ? toBpm - fromBpm : null;
   const keyCompat = fromKey && toKey && window.isKeyCompatible?.(fromKey, toKey);
   const unknown = !fromKey || !toKey || fromBpm == null || toBpm == null;
@@ -515,13 +654,15 @@ function TransitionHint({ fromBpm, toBpm, fromKey, toKey }) {
   return (
     <div style={{
       padding: 12, borderRadius: 6,
-      background: good ? 'rgba(232,255,74,0.12)' : 'rgba(244,239,230,0.04)',
-      border: `1px solid ${good ? '#E8FF4A' : 'rgba(244,239,230,0.1)'}`,
+      background: good
+        ? `color-mix(in oklab, ${accentColor} 12%, transparent)`
+        : 'var(--hover)',
+      border: `1px solid ${good ? accentColor : 'var(--border)'}`,
       marginBottom: 20,
     }}>
       <div style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
-        textTransform: 'uppercase', color: good ? '#E8FF4A' : 'rgba(244,239,230,0.55)',
+        textTransform: 'uppercase', color: good ? accentColor : 'var(--dim)',
         marginBottom: 6,
       }}>Transition</div>
       <div style={{ fontSize: 14 }}>

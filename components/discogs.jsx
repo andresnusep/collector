@@ -2,15 +2,27 @@
 // Uses a personal access token (Discogs → Settings → Developers → Generate new token).
 // Token + username are stored to localStorage so the user doesn't have to re-enter each time.
 
-function DiscogsImportModal({ open, onClose, onImport }) {
+function DiscogsImportModal({ open, onClose, onImport, existingRecords }) {
   const [username, setUsername] = React.useState(() => localStorage.getItem('cs-discogs-user') || '');
   const [token, setToken] = React.useState(() => localStorage.getItem('cs-discogs-token') || '');
+  const [refetchAll, setRefetchAll] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
-  const [progress, setProgress] = React.useState({ page: 0, total: 0, imported: 0, tracksDone: 0, tracksTotal: 0 });
+  const [progress, setProgress] = React.useState({ page: 0, total: 0, imported: 0, skipped: 0, tracksDone: 0, tracksTotal: 0 });
   const [error, setError] = React.useState('');
-  const [done, setDone] = React.useState(null); // { count }
+  const [done, setDone] = React.useState(null); // { count, skipped }
 
   if (!open) return null;
+
+  // Discogs IDs of records already in the collection — passed to
+  // fetchDiscogsCollection so it can skip the slow per-release tracklist fetch
+  // for anything the user already has.
+  const existingIds = React.useMemo(() => {
+    const s = new Set();
+    for (const r of existingRecords || []) {
+      if (r.discogsId != null) s.add(r.discogsId);
+    }
+    return s;
+  }, [existingRecords]);
 
   const startImport = async () => {
     setError(''); setDone(null);
@@ -20,10 +32,13 @@ function DiscogsImportModal({ open, onClose, onImport }) {
     setBusy(true);
     try {
       const records = await fetchDiscogsCollection(username.trim(), token.trim(),
-        (page, total, imported, tracksDone, tracksTotal) =>
-          setProgress({ page, total, imported, tracksDone: tracksDone || 0, tracksTotal: tracksTotal || 0 }));
+        (page, total, imported, tracksDone, tracksTotal, skipped) =>
+          setProgress({ page, total, imported,
+            skipped: skipped || 0,
+            tracksDone: tracksDone || 0, tracksTotal: tracksTotal || 0 }),
+        { existingIds: refetchAll ? new Set() : existingIds });
       onImport(records);
-      setDone({ count: records.length });
+      setDone({ count: records.length, skipped: progress.skipped });
     } catch (e) {
       setError(e.message || 'Import failed.');
     } finally {
@@ -87,6 +102,19 @@ function DiscogsImportModal({ open, onClose, onImport }) {
           }}>{error}</div>
         )}
 
+        {!busy && !done && existingIds.size > 0 && (
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontSize: 12, color: 'var(--dim)', marginTop: 6, marginBottom: 4,
+            cursor: 'pointer',
+          }}>
+            <input type="checkbox" checked={refetchAll}
+              onChange={e => setRefetchAll(e.target.checked)}
+              style={{ margin: 0 }} />
+            Re-fetch all (slower — refreshes metadata for {existingIds.size} already-imported records)
+          </label>
+        )}
+
         {busy && (
           <div style={{
             marginTop: 14, padding: 12, border: '1px solid var(--border)', borderRadius: 6,
@@ -95,6 +123,11 @@ function DiscogsImportModal({ open, onClose, onImport }) {
             {progress.tracksTotal > 0 && progress.tracksDone < progress.tracksTotal
               ? `Fetching tracklists · ${progress.tracksDone} of ${progress.tracksTotal}… (≈${Math.max(1, Math.ceil((progress.tracksTotal - progress.tracksDone) * 1.1 / 60))} min left)`
               : `Fetching page ${progress.page}${progress.total ? ` of ${progress.total}` : ''} · imported ${progress.imported}…`}
+            {progress.skipped > 0 && (
+              <div style={{ marginTop: 4, opacity: 0.7 }}>
+                Skipping {progress.skipped} already imported.
+              </div>
+            )}
           </div>
         )}
 
@@ -104,7 +137,15 @@ function DiscogsImportModal({ open, onClose, onImport }) {
             background: 'color-mix(in oklab, var(--accent) 12%, transparent)',
             border: '1px solid var(--accent)', fontSize: 13, color: 'var(--fg)',
           }}>
-            Imported <b>{done.count}</b> records with full tracklists. BPM/key aren't in Discogs — fill them in the detail view, or we'll add Spotify matching later.
+            {done.count === 0
+              ? <>No new records to import — your collection is up to date.</>
+              : <>Imported <b>{done.count}</b> new records with full tracklists.</>}
+            {done.skipped > 0 && (
+              <div style={{ marginTop: 4, fontSize: 12, color: 'var(--dim)' }}>
+                {done.skipped} already-imported records left untouched. Use the
+                Discogs pill on any album to refresh it individually.
+              </div>
+            )}
           </div>
         )}
 
@@ -154,7 +195,7 @@ const secondaryBtnStyle = {
 
 // ─────────── API ───────────
 
-async function fetchDiscogsCollection(username, token, onProgress) {
+async function fetchDiscogsCollection(username, token, onProgress, opts = {}) {
   const headers = {
     'Authorization': `Discogs token=${token}`,
     'User-Agent': 'CollectorStudio/0.4',
@@ -162,6 +203,7 @@ async function fetchDiscogsCollection(username, token, onProgress) {
   const perPage = 100;
   let page = 1, totalPages = 1;
   const all = [];
+  const existingIds = opts.existingIds instanceof Set ? opts.existingIds : new Set();
 
   // Step 1: paginate the collection for basic_information
   while (page <= totalPages) {
@@ -178,13 +220,21 @@ async function fetchDiscogsCollection(username, token, onProgress) {
       const mapped = mapDiscogsRelease(rel);
       if (mapped) all.push(mapped);
     }
-    onProgress?.(page, totalPages, all.length, 0, all.length);
+    onProgress?.(page, totalPages, all.length, 0, all.length, 0);
     page++;
   }
 
+  // Smart-import skip: drop releases already in the local collection before
+  // the slow tracklist fetch. `existingIds` is empty when the user ticks
+  // "Re-fetch all" in the modal, so the original full-import behavior is preserved.
+  const skipped = all.filter(r => existingIds.has(r.discogsId)).length;
+  const toFetch = existingIds.size > 0
+    ? all.filter(r => !existingIds.has(r.discogsId))
+    : all;
+
   // Step 2: fetch full tracklist per release (throttled for 60 req/min limit)
-  for (let i = 0; i < all.length; i++) {
-    const rec = all[i];
+  for (let i = 0; i < toFetch.length; i++) {
+    const rec = toFetch[i];
     try {
       const res = await fetchWithRetry(`https://api.discogs.com/releases/${rec.discogsId}`, { headers });
       if (res.ok) {
@@ -195,12 +245,14 @@ async function fetchDiscogsCollection(username, token, onProgress) {
         if (full.styles?.length && rec.genre === 'Unknown') rec.genre = full.styles[0];
       }
     } catch (e) { /* skip failed track fetch, keep basic info */ }
-    onProgress?.(totalPages, totalPages, all.length, i + 1, all.length);
+    onProgress?.(totalPages, totalPages, toFetch.length, i + 1, toFetch.length, skipped);
     // Throttle: ~1.1s between calls keeps us under 60/min
-    if (i < all.length - 1) await new Promise(r => setTimeout(r, 1100));
+    if (i < toFetch.length - 1) await new Promise(r => setTimeout(r, 1100));
   }
 
-  return all;
+  // Only return new records to be merged upstream — existing ones are
+  // untouched by the import path (use the per-album refresh to update them).
+  return toFetch;
 }
 
 async function fetchWithRetry(url, opts, attempt = 0) {

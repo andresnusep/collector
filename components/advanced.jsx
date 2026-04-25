@@ -258,9 +258,12 @@ function ExportMenu({ resolved, setName }) {
 
   return (
     <div style={{ position: 'relative', flex: 2 }}>
+      {/* Ghosted accent style — matches the "Gig mode" launcher next to it so
+          "Save set" stays the only solid-accent primary action in the bottom bar. */}
       <button onClick={() => setOpen(o => !o)} style={{
-        width: '100%', padding: '10px', background: 'var(--accent)',
-        border: 'none', borderRadius: 6, color: 'var(--on-accent)',
+        width: '100%', padding: '10px',
+        background: 'color-mix(in oklab, var(--accent) 15%, transparent)',
+        border: '1px solid var(--accent)', borderRadius: 6, color: 'var(--fg)',
         cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: 0.5,
         textTransform: 'uppercase', fontFamily: 'inherit',
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
