@@ -166,6 +166,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   const [analyzeOpen, setAnalyzeOpen] = React.useState(false);
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(null); // record being edited or null for new
+  const [findDjsOpen, setFindDjsOpen] = React.useState(false);
 
   const handleDiscogsImport = (imported) => {
     setRecords(cur => {
@@ -483,6 +484,9 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           const cloud = await window.Sync.fetchProfile();
           if (cloud) setProfile(window.migrateProfile(cloud));
         }
+        // 'follows' scope is handled inside the per-profile useFollowData
+        // hook (it subscribes via window.Sync.onPeerChange separately and
+        // refetches its own counts), so no app-level state to refresh here.
       } finally { inflight = false; }
     };
     return window.Sync.onPeerChange(refresh);
@@ -716,6 +720,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       {/* Sidebar */}
       <Sidebar view={view} setView={setView} set={set} records={records} gigs={gigs}
         onOpenImport={() => setImportOpen(true)}
+        onFindDjs={() => setFindDjsOpen(true)}
         onAddRecord={openNewRecord}
         onAnalyze={() => setAnalyzeOpen(true)}
         crates={crates} activeCrateId={activeCrateId} setActiveCrateId={setActiveCrateId}
@@ -864,6 +869,11 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
         onClose={() => setAnalyzeOpen(false)}
         onApply={applyAnalysis} />
 
+      {findDjsOpen && (
+        <UserSearchModal viewerId={user?.id}
+          onClose={() => setFindDjsOpen(false)} />
+      )}
+
       {gigMode && (() => {
         const resolved = gigResolved || set.map(tid => {
           const p = window.parseTrackId(tid);
@@ -877,7 +887,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   );
 }
 
-function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile, user, onSignOut }) {
+function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord, onAnalyze, onFindDjs, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile, user, onSignOut }) {
   const stats = {
     total: records.length,
     genres: new Set(records.map(r => r.genre)).size,
@@ -949,6 +959,10 @@ function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord,
           badge={gigs.length > 0 ? gigs.length : null} />
         <NavItem icon={Icon.Grid} label="Dashboard"
           active={view === 'dashboard'} onClick={() => setView('dashboard')} />
+        {onFindDjs && (
+          <NavItem icon={Icon.User} label="Find DJs"
+            active={false} onClick={onFindDjs} />
+        )}
       </nav>
 
       <SavedSetsList savedSets={savedSets} currentSet={set}

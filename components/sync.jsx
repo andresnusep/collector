@@ -128,6 +128,43 @@ const Sync = {
     if (error) { console.warn('[gigs] fetch public', error); return []; }
     return (data || []).map(r => r.data);
   },
+  // Discover DJs — used by the user-search UI. Returns minimal display rows
+  // for any profile flagged is_discoverable. RLS already restricts what anon
+  // can read, so this is safe even when called from a signed-out viewer.
+  // Filtering by query happens client-side because the JSON shape doesn't
+  // support a server-side full-text search without a tsvector column, which
+  // is over-engineered for the early discoverable user count we'll have.
+  searchProfiles: async (query) => {
+    const { data, error } = await sb().from('profiles')
+      .select('user_id, data').limit(200);
+    if (error) { console.warn('[profiles] search', error); return []; }
+    const q = (query || '').trim().toLowerCase();
+    return (data || [])
+      .filter(r => r.data && r.data.is_discoverable === true)
+      .map(r => ({
+        user_id: r.user_id,
+        djName: r.data.djName || '',
+        name: r.data.name || '',
+        photo: r.data.photo || '',
+        location: r.data.location || '',
+        bio: r.data.bio || '',
+      }))
+      .filter(p => {
+        if (!q) return true;
+        const hay = `${p.djName} ${p.name} ${p.location}`.toLowerCase();
+        return hay.includes(q);
+      })
+      .sort((a, b) => (a.djName || a.name || '').localeCompare(b.djName || b.name || ''));
+  },
+  // Fetch a batch of profiles by id — used to render lists like "people I
+  // follow" without N+1 queries.
+  fetchProfilesByIds: async (ids) => {
+    if (!ids || ids.length === 0) return [];
+    const { data, error } = await sb().from('profiles')
+      .select('user_id, data').in('user_id', ids);
+    if (error) { console.warn('[profiles] fetchByIds', error); return []; }
+    return (data || []).map(r => ({ user_id: r.user_id, ...(r.data || {}) }));
+  },
   // Subscribe to peer-tab writes. Returns an unsubscribe fn.
   onPeerChange: (handler) => {
     const fn = (e) => { if (e && e.data && e.data.scope) handler(e.data.scope); };

@@ -66,22 +66,29 @@ function ProfileAvatar({ profile, size = 40, onClick }) {
 // ─────────── Shared profile layout (Instagram-style) ───────────
 
 function ProfileScreen({ profile, sets = [], gigs = [], records = [],
-                         isOwner, onEdit, onShare, onRetryBpmAnalysis }) {
+                         isOwner, onEdit, onShare, onRetryBpmAnalysis,
+                         followerCount = 0, followingCount = 0,
+                         isFollowing = false, canFollow = false,
+                         followBusy = false,
+                         onFollow, onShowFollowers, onShowFollowing }) {
   const [tab, setTab] = React.useState('info');
   // Owner sees everything (with private badges); visitors see public-only.
   const visibleSets = isOwner ? sets : sets.filter(s => s.is_public);
   const visibleGigs = isOwner ? gigs : gigs.filter(g => g.is_public);
-  const today = new Date().toISOString().slice(0, 10);
-  const upcomingCount = visibleGigs.filter(
-    g => (g.status || (g.playedAt && g.playedAt >= today ? 'upcoming' : 'played')) === 'upcoming'
-  ).length;
 
   return (
     <div style={{ maxWidth: 780, margin: '0 auto', padding: '8px 0 60px' }}>
       <ProfileHeader profile={profile} isOwner={isOwner}
         setsCount={visibleSets.length}
         gigsCount={visibleGigs.length}
-        upcomingCount={upcomingCount}
+        followerCount={followerCount}
+        followingCount={followingCount}
+        isFollowing={isFollowing}
+        canFollow={canFollow}
+        followBusy={followBusy}
+        onFollow={onFollow}
+        onShowFollowers={onShowFollowers}
+        onShowFollowing={onShowFollowing}
         onEdit={onEdit} onShare={onShare} />
 
       <ProfileTabs tab={tab} setTab={setTab}
@@ -108,7 +115,10 @@ function ProfileScreen({ profile, sets = [], gigs = [], records = [],
 
 // ─────────── Header ───────────
 
-function ProfileHeader({ profile, isOwner, setsCount, gigsCount, upcomingCount, onEdit, onShare }) {
+function ProfileHeader({ profile, isOwner, setsCount, gigsCount,
+                         followerCount, followingCount, isFollowing, canFollow,
+                         followBusy, onFollow, onShowFollowers, onShowFollowing,
+                         onEdit, onShare }) {
   const displayName = profile.djName || profile.name || 'Unnamed DJ';
   const realName = profile.djName && profile.name && profile.djName !== profile.name
     ? profile.name : null;
@@ -150,11 +160,15 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount, upcomingCount, 
           }}>{profile.location}</div>
         )}
 
-        {/* Inline counters — IG-style */}
+        {/* Inline counters — IG-style. Followers/Following are clickable to
+            open the list modals; Sets/Gigs are static counts. */}
         <div style={{ display: 'flex', gap: 22, marginBottom: 12 }}>
           <HeaderCounter value={setsCount} label="Sets" />
           <HeaderCounter value={gigsCount} label="Gigs" />
-          <HeaderCounter value={upcomingCount} label="Upcoming" />
+          <HeaderCounter value={followerCount} label="Followers"
+            onClick={onShowFollowers} />
+          <HeaderCounter value={followingCount} label="Following"
+            onClick={onShowFollowing} />
         </div>
 
         {profile.bio && (
@@ -164,41 +178,57 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount, upcomingCount, 
 
         <ProfileLinks links={profile.links} />
 
-        {isOwner && (
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            {onEdit && (
-              <button onClick={onEdit} style={{
-                padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)',
-                background: 'transparent', color: 'var(--fg)', cursor: 'pointer',
-                fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-                letterSpacing: 1, textTransform: 'uppercase',
-              }}>Edit profile</button>
-            )}
-            {onShare && (
-              <button onClick={onShare} style={{
-                padding: '8px 14px', borderRadius: 8, border: 'none',
-                background: 'var(--accent)', color: 'var(--on-accent)', cursor: 'pointer',
-                fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-                letterSpacing: 1, textTransform: 'uppercase',
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>{Icon.Share} Share profile</button>
-            )}
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+          {isOwner && onEdit && (
+            <button onClick={onEdit} style={{
+              padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--fg)', cursor: 'pointer',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
+              letterSpacing: 1, textTransform: 'uppercase',
+            }}>Edit profile</button>
+          )}
+          {isOwner && onShare && (
+            <button onClick={onShare} style={{
+              padding: '8px 14px', borderRadius: 8, border: 'none',
+              background: 'var(--accent)', color: 'var(--on-accent)', cursor: 'pointer',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
+              letterSpacing: 1, textTransform: 'uppercase',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>{Icon.Share} Share profile</button>
+          )}
+          {!isOwner && canFollow && onFollow && (
+            <button onClick={onFollow} disabled={followBusy} style={{
+              padding: '8px 16px', borderRadius: 8,
+              border: isFollowing ? '1px solid var(--border)' : 'none',
+              background: isFollowing ? 'transparent' : 'var(--accent)',
+              color: isFollowing ? 'var(--fg)' : 'var(--on-accent)',
+              cursor: followBusy ? 'default' : 'pointer',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
+              letterSpacing: 1, textTransform: 'uppercase',
+              opacity: followBusy ? 0.6 : 1,
+              minWidth: 110,
+            }}>{isFollowing ? 'Following' : 'Follow'}</button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function HeaderCounter({ value, label }) {
+function HeaderCounter({ value, label, onClick }) {
+  const interactive = !!onClick;
   return (
-    <div>
+    <button onClick={onClick} disabled={!interactive} style={{
+      background: 'transparent', border: 'none', padding: 0,
+      color: 'var(--fg)', cursor: interactive ? 'pointer' : 'default',
+      textAlign: 'left', fontFamily: 'inherit',
+    }}>
       <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{value}</div>
       <div style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.2,
         textTransform: 'uppercase', color: 'var(--dim)', marginTop: 4,
       }}>{label}</div>
-    </div>
+    </button>
   );
 }
 
@@ -693,11 +723,79 @@ function MiniStat({ label, value }) {
   );
 }
 
+// ─────────── Custom hook: follow state for a viewed profile ───────────
+
+// Encapsulates "show me follower/following counts for `userId`, plus whether
+// `viewerId` follows them, and give me a toggle". Refetches whenever a
+// 'follows' event lands on the BroadcastChannel so cross-tab actions stay
+// in sync.
+function useFollowData(userId, viewerId) {
+  const [followerCount, setFollowerCount] = React.useState(0);
+  const [followingCount, setFollowingCount] = React.useState(0);
+  const [isFollowing, setIsFollowing] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+
+  const reload = React.useCallback(async () => {
+    if (!userId || !window.Sync) return;
+    const [followers, following, viewerFollowing] = await Promise.all([
+      window.Sync.fetchFollowers(userId),
+      window.Sync.fetchFollowing(userId),
+      viewerId && viewerId !== userId
+        ? window.Sync.fetchFollowing(viewerId)
+        : Promise.resolve([]),
+    ]);
+    setFollowerCount((followers || []).length);
+    setFollowingCount((following || []).length);
+    if (viewerId && viewerId !== userId) {
+      setIsFollowing((viewerFollowing || []).includes(userId));
+    } else {
+      setIsFollowing(false);
+    }
+  }, [userId, viewerId]);
+
+  React.useEffect(() => { reload(); }, [reload]);
+  React.useEffect(() => {
+    if (!window.Sync || !window.Sync.onPeerChange) return;
+    return window.Sync.onPeerChange((scope) => {
+      if (scope === 'follows') reload();
+    });
+  }, [reload]);
+
+  const toggleFollow = React.useCallback(async () => {
+    if (!viewerId || viewerId === userId || busy || !window.Sync) return;
+    setBusy(true);
+    try {
+      if (isFollowing) {
+        await window.Sync.unfollow(userId);
+        setIsFollowing(false);
+        setFollowerCount(c => Math.max(0, c - 1));
+      } else {
+        await window.Sync.follow(userId);
+        setIsFollowing(true);
+        setFollowerCount(c => c + 1);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [userId, viewerId, isFollowing, busy]);
+
+  return {
+    followerCount, followingCount, isFollowing, busy,
+    canFollow: !!viewerId && viewerId !== userId,
+    toggleFollow, reload,
+  };
+}
+
 // ─────────── In-app wrapper (the /profile view) ───────────
 
 function ProfilePage({ profile, setProfile, records, savedSets, gigs, user, onSignOut, onRetryBpmAnalysis }) {
   const [editing, setEditing] = React.useState(false);
   const [shareMsg, setShareMsg] = React.useState('');
+  const [followsModal, setFollowsModal] = React.useState(null); // 'followers' | 'following' | null
+
+  const ownerId = user?.id || profile?.id;
+  const follow = useFollowData(ownerId, ownerId);
+
   const handleShare = () => {
     if (!user || !user.id) return;
     const url = `${window.location.origin}/#u/${user.id}`;
@@ -725,6 +823,10 @@ function ProfilePage({ profile, setProfile, records, savedSets, gigs, user, onSi
       <ProfileScreen profile={profile}
         sets={savedSets || []} gigs={gigs || []} records={records || []}
         isOwner={true}
+        followerCount={follow.followerCount}
+        followingCount={follow.followingCount}
+        onShowFollowers={() => setFollowsModal('followers')}
+        onShowFollowing={() => setFollowsModal('following')}
         onEdit={() => setEditing(true)}
         onShare={handleShare}
         onRetryBpmAnalysis={onRetryBpmAnalysis} />
@@ -734,6 +836,10 @@ function ProfilePage({ profile, setProfile, records, savedSets, gigs, user, onSi
           onRetryBpmAnalysis={onRetryBpmAnalysis}
           onSave={(p) => { setProfile(p); setEditing(false); }}
           onClose={() => setEditing(false)} />
+      )}
+      {followsModal && (
+        <FollowListModal kind={followsModal} userId={ownerId}
+          onClose={() => setFollowsModal(null)} />
       )}
     </>
   );
@@ -747,6 +853,10 @@ function PublicProfilePage({ userId, viewerSession, onExit }) {
   const [gigs, setGigs] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [notFound, setNotFound] = React.useState(false);
+  const [followsModal, setFollowsModal] = React.useState(null);
+
+  const viewerId = viewerSession?.user?.id || null;
+  const follow = useFollowData(userId, viewerId);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -786,9 +896,21 @@ function PublicProfilePage({ userId, viewerSession, onExit }) {
         )}
         {!loading && !notFound && profile && (
           <ProfileScreen profile={profile} sets={sets} gigs={gigs} records={[]}
-            isOwner={false} />
+            isOwner={false}
+            followerCount={follow.followerCount}
+            followingCount={follow.followingCount}
+            isFollowing={follow.isFollowing}
+            canFollow={follow.canFollow}
+            followBusy={follow.busy}
+            onFollow={follow.toggleFollow}
+            onShowFollowers={() => setFollowsModal('followers')}
+            onShowFollowing={() => setFollowsModal('following')} />
         )}
       </div>
+      {followsModal && (
+        <FollowListModal kind={followsModal} userId={userId}
+          onClose={() => setFollowsModal(null)} />
+      )}
     </div>
   );
 }
@@ -1150,7 +1272,214 @@ function formatDate(iso) {
     : { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ─────────── Follow list modal ───────────
+
+// Renders the "people I follow" / "people who follow me" list. Each row links
+// to the target's public profile via the hash route — clicking closes this
+// modal and triggers Root's hashchange handler to swap PublicProfilePage in.
+function FollowListModal({ kind, userId, onClose }) {
+  const [people, setPeople] = React.useState(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = kind === 'followers'
+        ? await window.Sync.fetchFollowers(userId)
+        : await window.Sync.fetchFollowing(userId);
+      if (cancelled) return;
+      if (!ids || ids.length === 0) { setPeople([]); return; }
+      // Fetch profile data for the discoverable members. Non-discoverable
+      // profiles are filtered out by RLS so they simply don't come back.
+      const profs = await window.Sync.fetchProfilesByIds(ids);
+      if (cancelled) return;
+      // Preserve the input order so most-recent follows stay near the top.
+      const byId = new Map(profs.map(p => [p.user_id, p]));
+      setPeople(ids.map(id => byId.get(id)).filter(Boolean));
+    })();
+    return () => { cancelled = true; };
+  }, [kind, userId]);
+
+  const goTo = (uid) => {
+    window.location.hash = '#u/' + uid;
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 220,
+      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '48px 16px', overflowY: 'auto',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: 460, maxWidth: '100%', background: 'var(--panel)',
+        border: '1px solid var(--border)', borderRadius: 12, padding: 22,
+        color: 'var(--fg)', boxShadow: '0 30px 80px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', marginBottom: 14 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, letterSpacing: -0.4,
+            textTransform: 'capitalize' }}>{kind}</h3>
+          <IconButton onClick={onClose} title="Close">{Icon.X}</IconButton>
+        </div>
+        {people === null && (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--dim)',
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: 1,
+            textTransform: 'uppercase' }}>Loading…</div>
+        )}
+        {people && people.length === 0 && (
+          <div style={{
+            padding: 24, textAlign: 'center', color: 'var(--dim)', fontSize: 12,
+            border: '1px dashed var(--border)', borderRadius: 10,
+          }}>{kind === 'followers' ? 'No public followers yet.' : 'Not following anyone yet.'}</div>
+        )}
+        {people && people.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {people.map(p => (
+              <button key={p.user_id} onClick={() => goTo(p.user_id)}
+                style={followRowStyle}>
+                <ProfileAvatar profile={p} size={42} />
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.djName || p.name || 'Unnamed DJ'}
+                  </div>
+                  {p.location && (
+                    <div style={{
+                      fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+                      color: 'var(--dim)', letterSpacing: 0.5, textTransform: 'uppercase',
+                    }}>{p.location}</div>
+                  )}
+                </div>
+                <span style={{ opacity: 0.4 }}>›</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────── Discover DJs (user search) ───────────
+
+function UserSearchModal({ onClose, viewerId }) {
+  const [query, setQuery] = React.useState('');
+  const [results, setResults] = React.useState(null);
+  const [debounced, setDebounced] = React.useState('');
+
+  // Debounce input so we don't fire a query per keystroke.
+  React.useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 200);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const r = await window.Sync.searchProfiles(debounced);
+      if (cancelled) return;
+      // Hide the viewer's own profile from search results so it doesn't
+      // suggest "follow yourself".
+      setResults((r || []).filter(p => p.user_id !== viewerId));
+    })();
+    return () => { cancelled = true; };
+  }, [debounced, viewerId]);
+
+  const goTo = (uid) => {
+    window.location.hash = '#u/' + uid;
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 220,
+      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+      padding: '48px 16px', overflowY: 'auto',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: 480, maxWidth: '100%', background: 'var(--panel)',
+        border: '1px solid var(--border)', borderRadius: 12, padding: 22,
+        color: 'var(--fg)', boxShadow: '0 30px 80px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', marginBottom: 14 }}>
+          <div>
+            <div style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
+              textTransform: 'uppercase', color: 'var(--dim)',
+            }}>Discover</div>
+            <h3 style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700, letterSpacing: -0.5 }}>
+              Find DJs<span style={{ color: 'var(--accent)' }}>.</span>
+            </h3>
+          </div>
+          <IconButton onClick={onClose} title="Close">{Icon.X}</IconButton>
+        </div>
+
+        <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="Search public DJs by name or city…"
+          style={{ ...fieldStyle, marginBottom: 12 }} />
+
+        {results === null && (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--dim)',
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: 1,
+            textTransform: 'uppercase' }}>Loading…</div>
+        )}
+        {results && results.length === 0 && (
+          <div style={{
+            padding: 24, textAlign: 'center', color: 'var(--dim)', fontSize: 12,
+            border: '1px dashed var(--border)', borderRadius: 10, lineHeight: 1.5,
+          }}>
+            {debounced
+              ? `No public DJs match "${debounced}".`
+              : 'No public DJs yet. Be one of the first — flip your profile to public in Edit profile.'}
+          </div>
+        )}
+        {results && results.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6,
+            maxHeight: 460, overflowY: 'auto' }}>
+            {results.map(p => (
+              <button key={p.user_id} onClick={() => goTo(p.user_id)}
+                style={followRowStyle}>
+                <ProfileAvatar profile={p} size={42} />
+                <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.djName || p.name || 'Unnamed DJ'}
+                  </div>
+                  {p.location && (
+                    <div style={{
+                      fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+                      color: 'var(--dim)', letterSpacing: 0.5, textTransform: 'uppercase',
+                    }}>{p.location}</div>
+                  )}
+                  {p.bio && (
+                    <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 3,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      maxWidth: '100%' }}>{p.bio}</div>
+                  )}
+                </div>
+                <span style={{ opacity: 0.4 }}>›</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const followRowStyle = {
+  display: 'flex', alignItems: 'center', gap: 12,
+  padding: '10px 12px', borderRadius: 10,
+  background: 'var(--hover)', border: '1px solid var(--border)',
+  color: 'var(--fg)', fontFamily: 'inherit', cursor: 'pointer',
+  textAlign: 'left', width: '100%',
+};
+
 Object.assign(window, {
   ProfilePage, ProfileAvatar, PublicProfilePage,
   DEFAULT_PROFILE, migrateProfile,
+  UserSearchModal, FollowListModal,
 });
