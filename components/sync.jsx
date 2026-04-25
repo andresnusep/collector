@@ -51,6 +51,38 @@ function announce(scope) {
   try { tabChannel.postMessage({ scope, t: Date.now() }); } catch {}
 }
 
+// Follows is a junction table — no JSONB data, just (follower_id,
+// followed_id, created_at). Read/write helpers are bespoke since they
+// don't fit the generic upsertRow/fetchAll pattern.
+async function fetchFollowing(userId) {
+  const { data, error } = await sb().from('follows')
+    .select('followed_id').eq('follower_id', userId);
+  if (error) { console.warn('[follows] fetch following', error); return []; }
+  return (data || []).map(r => r.followed_id);
+}
+async function fetchFollowers(userId) {
+  const { data, error } = await sb().from('follows')
+    .select('follower_id').eq('followed_id', userId);
+  if (error) { console.warn('[follows] fetch followers', error); return []; }
+  return (data || []).map(r => r.follower_id);
+}
+async function follow(followedId) {
+  const { data: auth } = await sb().auth.getUser();
+  const followerId = auth?.user?.id;
+  if (!followerId || followerId === followedId) return;
+  const { error } = await sb().from('follows')
+    .insert({ follower_id: followerId, followed_id: followedId });
+  if (error) console.warn('[follows] insert', error);
+}
+async function unfollow(followedId) {
+  const { data: auth } = await sb().auth.getUser();
+  const followerId = auth?.user?.id;
+  if (!followerId) return;
+  const { error } = await sb().from('follows').delete()
+    .eq('follower_id', followerId).eq('followed_id', followedId);
+  if (error) console.warn('[follows] delete', error);
+}
+
 // Domain-specific helpers (just thin wrappers so callers read cleanly).
 // Each write announces its scope so other tabs of the same user can
 // re-fetch the affected collection.
@@ -66,8 +98,36 @@ const Sync = {
   fetchCrates:      () => fetchAll('crates'),
   upsertCrate:      async (c)  => { await upsertRow('crates', c.id, c); announce('crates'); },
   deleteCrate:      async (id) => { await deleteRow('crates', id); announce('crates'); },
+  fetchGigs:        () => fetchAll('gigs'),
+  upsertGig:        async (g)  => { await upsertRow('gigs', g.id, g); announce('gigs'); },
+  deleteGig:        async (id) => { await deleteRow('gigs', id); announce('gigs'); },
   fetchWorkspace:   () => fetchSingleton('workspace'),
   upsertWorkspace:  async (w)  => { await upsertSingleton('workspace', w); announce('workspace'); },
+  // Follow graph (junction table, different shape from the rest)
+  fetchFollowing,
+  fetchFollowers,
+  follow:           async (id) => { await follow(id); announce('follows'); },
+  unfollow:         async (id) => { await unfollow(id); announce('follows'); },
+  // Public reads — used by /u/{user_id} routes. No auth required because
+  // RLS policies allow anon to read rows flagged public/discoverable.
+  fetchPublicProfile: async (userId) => {
+    const { data, error } = await sb().from('profiles')
+      .select('data').eq('user_id', userId).maybeSingle();
+    if (error) { console.warn('[profiles] fetch public', error); return null; }
+    return data?.data ?? null;
+  },
+  fetchPublicSets: async (userId) => {
+    const { data, error } = await sb().from('saved_sets')
+      .select('id, data').eq('user_id', userId);
+    if (error) { console.warn('[saved_sets] fetch public', error); return []; }
+    return (data || []).map(r => r.data);
+  },
+  fetchPublicGigs: async (userId) => {
+    const { data, error } = await sb().from('gigs')
+      .select('id, data').eq('user_id', userId);
+    if (error) { console.warn('[gigs] fetch public', error); return []; }
+    return (data || []).map(r => r.data);
+  },
   // Subscribe to peer-tab writes. Returns an unsubscribe fn.
   onPeerChange: (handler) => {
     const fn = (e) => { if (e && e.data && e.data.scope) handler(e.data.scope); };

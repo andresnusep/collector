@@ -14,6 +14,12 @@ const DEFAULT_PROFILE = {
     residentadvisor: '',
     website: '',
   },
+  // Social/calendar fields. is_discoverable is snake_case because the SQL
+  // RLS policy reads `data->>'is_discoverable'` directly — keep the JS key
+  // matching the policy path. gigsMigratedAt stays camelCase since it's
+  // never referenced from SQL.
+  is_discoverable: false,
+  gigsMigratedAt: null,
 };
 
 function migrateProfile(p) {

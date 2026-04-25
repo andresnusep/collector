@@ -60,6 +60,15 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     if (saved) { try { return JSON.parse(saved); } catch {} }
     return [];
   });
+  // Calendar entity, decoupled from sets. Each gig:
+  //   { id, playedAt, venue, location, setId?, notes, status, is_public }
+  // is_public uses snake_case to match the SQL RLS policy path.
+  const [gigs, setGigs] = React.useState(() => {
+    const saved = localStorage.getItem('cs-gigs');
+    if (saved) { try { return JSON.parse(saved); } catch {} }
+    return [];
+  });
+  React.useEffect(() => { localStorage.setItem('cs-gigs', JSON.stringify(gigs)); }, [gigs]);
   const [activeSetId, setActiveSetId] = React.useState(null);
   const [currentSetName, setCurrentSetName] = React.useState(() => localStorage.getItem('cs-current-name') || '');
   React.useEffect(() => { localStorage.setItem('cs-saved-sets', JSON.stringify(savedSets)); }, [savedSets]);
@@ -277,6 +286,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   const prevRecordsRef = React.useRef(null);
   const prevSetsRef = React.useRef(null);
   const prevCratesRef = React.useRef(null);
+  const prevGigsRef = React.useRef(null);
 
   // Hydrate from Supabase on mount. If cloud is empty but we have local data,
   // migrate local data up so first-time users don't lose what they already built.
@@ -284,12 +294,13 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     if (!user) return;
     let cancelled = false;
     (async () => {
-      const [cloudProfile, cloudRecords, cloudSets, cloudCrates, cloudWorkspace] = await Promise.all([
+      const [cloudProfile, cloudRecords, cloudSets, cloudCrates, cloudWorkspace, cloudGigs] = await Promise.all([
         window.Sync.fetchProfile(),
         window.Sync.fetchRecords(),
         window.Sync.fetchSavedSets(),
         window.Sync.fetchCrates(),
         window.Sync.fetchWorkspace(),
+        window.Sync.fetchGigs(),
       ]);
       if (cancelled) return;
 
@@ -310,6 +321,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       const mergedRecords  = mergeById(records,   cloudRecords);
       const mergedSets     = mergeById(savedSets, cloudSets);
       const mergedCrates   = mergeById(crates,    cloudCrates);
+      const mergedGigs     = mergeById(gigs,      cloudGigs);
 
       // One-time cleanup of pre-launch demo records. The fictional collection
       // in data/records.js (Ondalina, Kofi Mensah Quintet, …) used IDs r01–r12;
@@ -338,10 +350,47 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
         await Promise.all(seedRecords.map(r => window.Sync.deleteRecord(r.id)));
       }
 
-      setProfile(window.migrateProfile(cloudProfile || profile));
+      // One-time migration: lift nested saved_sets.gigs[] into the new gigs
+      // table as proper rows. Gated by profile.gigsMigratedAt so it runs once
+      // per user (across devices). IDs are deterministic so even if it fires
+      // twice somehow, upsert is idempotent — no duplicates.
+      const baseProfile = window.migrateProfile(cloudProfile || profile);
+      let gigsAfterMigration = mergedGigs;
+      let profileAfterMigration = baseProfile;
+      if (!baseProfile.gigsMigratedAt) {
+        const existingGigIds = new Set(mergedGigs.map(g => g.id));
+        const today = new Date().toISOString().slice(0, 10);
+        const newGigs = [];
+        for (const s of cleanedSets) {
+          const nested = Array.isArray(s.gigs) ? s.gigs
+            : (s.gig ? [s.gig] : []);
+          nested.forEach((ng, i) => {
+            const nestedId = ng.id || `${i}`;
+            const id = `g_${s.id}_${nestedId}`;
+            if (existingGigIds.has(id)) return;
+            const playedAt = ng.playedAt || null;
+            const status = playedAt && playedAt < today ? 'played' : 'upcoming';
+            newGigs.push({
+              id,
+              playedAt,
+              venue: ng.venue || '',
+              location: '',
+              setId: s.id,
+              notes: ng.notes || '',
+              status,
+              is_public: false,
+            });
+          });
+        }
+        gigsAfterMigration = [...mergedGigs, ...newGigs];
+        profileAfterMigration = { ...baseProfile, gigsMigratedAt: Date.now() };
+      }
+
+      setProfile(profileAfterMigration);
       setRecords(cleanedRecords);
       setSavedSets(cleanedSets);
       setCrates(cleanedCrates);
+      setGigs(gigsAfterMigration);
       if (seedRecords.length) setSet(cleanedSet);
       if (cloudWorkspace) {
         if (Array.isArray(cloudWorkspace.set)) setSet(cloudWorkspace.set);
@@ -372,10 +421,14 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
 
       // Prime refs so write-through doesn't re-upsert what we just merged.
       // Use the cleaned versions so the diff effect doesn't double-fire the
-      // seed-record deletes we already issued above.
+      // seed-record deletes we already issued above. For gigs we prime with
+      // the pre-migration list so the diff effect upserts the freshly-lifted
+      // gigs to the cloud (and the upsert of the profile sets the migration
+      // flag, preventing re-runs).
       prevRecordsRef.current = cleanedRecords;
       prevSetsRef.current    = mergedSets;   // still merged: cleanedSets has new
       prevCratesRef.current  = mergedCrates; // object refs that should upsert
+      prevGigsRef.current    = mergedGigs;   // before migration, so new ones upload
       setHydrated(true);
     })();
     return () => { cancelled = true; };
@@ -403,6 +456,10 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           const cloud = await window.Sync.fetchCrates();
           setCrates(cloud);
           prevCratesRef.current = cloud;
+        } else if (scope === 'gigs') {
+          const cloud = await window.Sync.fetchGigs();
+          setGigs(cloud);
+          prevGigsRef.current = cloud;
         } else if (scope === 'workspace') {
           const cloud = await window.Sync.fetchWorkspace();
           if (cloud) {
@@ -465,6 +522,19 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     });
     prevCratesRef.current = crates;
   }, [crates, hydrated]);
+
+  // Write-through: gigs
+  React.useEffect(() => {
+    if (!hydrated) return;
+    const prev = prevGigsRef.current || [];
+    window.diffArraySync({
+      prev, curr: gigs,
+      getId: (g) => g.id,
+      onUpsert: (g) => window.Sync.upsertGig(g),
+      onDelete: (id) => window.Sync.deleteGig(id),
+    });
+    prevGigsRef.current = gigs;
+  }, [gigs, hydrated]);
 
   // Write-through: workspace (current builder + active set + name, debounced)
   const upsertWorkspaceDebounced = React.useMemo(
