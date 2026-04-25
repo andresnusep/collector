@@ -1,7 +1,7 @@
 // Mobile companion — gig-ready quick reference
 
 function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrentSetName,
-                     onSaveSet, onToggleTrack, onRemoveFromSet, onClearSet, onLoadSavedSet,
+                     onSaveSet, onToggleTrack, onRemoveFromSet, onReorderSet, onClearSet, onLoadSavedSet,
                      profile, setProfile, user, onSignOut,
                      darkMode, accent }) {
   const [tab, setTab] = React.useState('now');
@@ -128,7 +128,8 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
         }).filter(Boolean)}
           currentSetName={currentSetName} setCurrentSetName={setCurrentSetName}
           onBack={() => setSetPage('hub')}
-          onSaveSet={onSaveSet} onRemoveFromSet={onRemoveFromSet} onClearSet={onClearSet}
+          onSaveSet={onSaveSet} onRemoveFromSet={onRemoveFromSet}
+          onReorderSet={onReorderSet} onClearSet={onClearSet}
           onGoBrowse={() => setTab('lib')}
           accent={accent} fg={fg} soft={soft} border={border} />
       )}
@@ -262,32 +263,51 @@ function PickerRow({ label, sublabel, selected, accent, onClick }) {
   );
 }
 
-// Camelot harmonic distance: 0 = same key, 1 = adjacent on wheel or relative major/minor,
-// 2+ = further / clashing. Null keys get a neutral penalty.
-function camelotDistance(a, b) {
-  if (!a || !b) return 3;
-  const parse = (k) => {
-    const m = String(k).trim().match(/^(\d{1,2})([AB])$/i);
-    if (!m) return null;
-    return { n: parseInt(m[1], 10), ab: m[2].toUpperCase() };
-  };
-  const pa = parse(a), pb = parse(b);
-  if (!pa || !pb) return 3;
-  if (pa.n === pb.n && pa.ab === pb.ab) return 0;
-  // Relative major/minor: same number, different letter
-  if (pa.n === pb.n) return 1;
-  // Circle distance (1..12 wrap)
-  let d = Math.abs(pa.n - pb.n);
-  if (d > 6) d = 12 - d;
-  // Same letter family gets lower penalty than cross-family jumps
-  return pa.ab === pb.ab ? d : d + 1;
-}
+// Camelot harmonic distance lives in atoms.jsx → window.camelotDistance.
 
 // ─────────── Now (gig mode) ───────────
 
 function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNext, onPrev,
                     savedSets, selectedSetId, setSelectedSetId, activeSetLabel,
                     accent, fg, bg, soft, border }) {
+  // iTunes preview playback — shared <audio> element, one-track-at-a-time.
+  const audioRef = React.useRef(null);
+  const [playingTid, setPlayingTid] = React.useState(null);
+  const [loadingTid, setLoadingTid] = React.useState(null);
+  const [missTid, setMissTid] = React.useState(null); // one-shot "no preview" flash
+
+  const stop = React.useCallback(() => {
+    const a = audioRef.current;
+    if (a) { a.pause(); a.currentTime = 0; }
+    setPlayingTid(null);
+  }, []);
+
+  const togglePreview = React.useCallback(async (tid, artist, title) => {
+    if (playingTid === tid) { stop(); return; }
+    if (!window.iTunesPreview) return;
+    stop();
+    setLoadingTid(tid);
+    try {
+      const url = await window.iTunesPreview.getPreview(tid, artist, title);
+      if (!url) {
+        setMissTid(tid);
+        setTimeout(() => setMissTid(m => (m === tid ? null : m)), 1500);
+        return;
+      }
+      const a = audioRef.current;
+      if (!a) return;
+      a.src = url;
+      try { await a.play(); setPlayingTid(tid); }
+      catch { setPlayingTid(null); }
+    } finally {
+      setLoadingTid(null);
+    }
+  }, [playingTid, stop]);
+
+  // Stop playback when the current track changes or the component unmounts.
+  React.useEffect(() => { stop(); }, [current && current.tid, stop]);
+  React.useEffect(() => () => stop(), [stop]);
+
   if (!current) return null;
   const r = current.record, t = current.track;
 
@@ -302,16 +322,32 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
       .filter((q, i) => i !== position && q.track.bpm != null);
     const scored = pool.map(q => {
       const bpmDiff = Math.abs(q.track.bpm - currentBpm);
-      const keyPenalty = camelotDistance(currentKey, q.track.key);
+      const keyPenalty = window.camelotDistance(currentKey, q.track.key);
       // BPM-first: score = bpmDiff * 2 + keyPenalty (key still matters but doesn't dominate)
       return { ...q, bpmDiff, keyPenalty, score: bpmDiff * 2 + keyPenalty };
     });
     scored.sort((a, b) => a.score - b.score);
     return scored.slice(0, 3);
   }, [queue, position, t.bpm, t.key]);
+
+  // Next 3 tracks in queue order (wraps around).
+  const upNext = React.useMemo(() => {
+    if (!queue || queue.length < 2) return [];
+    const out = [];
+    for (let k = 1; k <= 3 && k < queue.length; k++) {
+      const idx = (position + k) % queue.length;
+      out.push({ ...queue[idx], qIdx: idx });
+    }
+    return out;
+  }, [queue, position]);
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column',
       padding: '0 18px', overflowY: 'auto' }}>
+      {/* Preload=none keeps mobile from buffering before the user hits play */}
+      <audio ref={audioRef} style={{ display: 'none' }} preload="none"
+        onEnded={() => setPlayingTid(null)} />
+
       <SetPicker savedSets={savedSets} selectedSetId={selectedSetId}
         setSelectedSetId={setSelectedSetId} activeSetLabel={activeSetLabel}
         fg={fg} soft={soft} border={border} accent={accent} />
@@ -324,7 +360,7 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
         <span>{String(position + 1).padStart(2, '0')} / {String(queueLen).padStart(2, '0')}</span>
       </div>
 
-      {/* Current track — medium cover, huge BPM/Key */}
+      {/* Current track — medium cover, side+number chip above title */}
       <div style={{
         display: 'flex', gap: 14, alignItems: 'center', marginBottom: 14,
       }}>
@@ -333,21 +369,41 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
           style={{ width: 120, height: 120, borderRadius: 6,
             boxShadow: '0 12px 28px rgba(0,0,0,0.35)', flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
+          {t.n && (
+            <div style={{
+              display: 'inline-block',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+              letterSpacing: 1.2, padding: '2px 7px', borderRadius: 4,
+              background: accent, color: '#0E0C0A', marginBottom: 5,
+            }}>{t.n}</div>
+          )}
           <div style={{
             fontSize: 17, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.15,
             overflow: 'hidden', display: '-webkit-box',
             WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
           }}>{t.title}</div>
           <div style={{
-            fontSize: 11, opacity: 0.6, marginTop: 3,
-            fontFamily: 'JetBrains Mono, monospace',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{r.artist}</div>
+            display: 'flex', alignItems: 'center', gap: 8, marginTop: 5,
+          }}>
+            <div style={{
+              flex: 1, minWidth: 0,
+              fontSize: 11, opacity: 0.6,
+              fontFamily: 'JetBrains Mono, monospace',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{r.artist}</div>
+            <PreviewBtn
+              state={loadingTid === current.tid ? 'loading'
+                : playingTid === current.tid ? 'playing'
+                : missTid === current.tid ? 'miss' : 'idle'}
+              size={34}
+              onClick={() => togglePreview(current.tid, r.artist, t.title || r.title)}
+              accent={accent} fg={fg} border={border} />
+          </div>
         </div>
       </div>
 
       <div style={{
-        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 18,
+        display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 12,
       }}>
         <BigStat label="BPM" value={t.bpm ?? '—'} accent={accent} />
         <BigStat label="Key" value={t.key ?? '—'} accent={accent} small />
@@ -355,45 +411,20 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
           accent={accent} small />
       </div>
 
-      {/* Up next — prominent */}
-      {nextUp && nextUp !== current && (
-        <>
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
-            textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
-          }}>Up next</div>
-          <div style={{
-            display: 'flex', gap: 12, alignItems: 'center', padding: 12,
-            borderRadius: 10, background: soft, border: `1px solid ${border}`,
-            marginBottom: 14,
-          }}>
-            <RecordCover hue={nextUp.record.cover.hue} shape={nextUp.record.cover.shape}
-              imageUrl={nextUp.record.cover.image}
-              title={nextUp.record.title} artist={nextUp.record.artist} size={56}
-              style={{ width: 56, height: 56, borderRadius: 4, flexShrink: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {nextUp.track.title}
-              </div>
-              <div style={{ fontSize: 11, opacity: 0.6,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {nextUp.record.artist}
-              </div>
-            </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 18, fontWeight: 700, color: accent, lineHeight: 1 }}>
-                {nextUp.track.bpm ?? '—'}
-              </div>
-              <div style={{ fontFamily: 'JetBrains Mono, monospace',
-                fontSize: 11, opacity: 0.7, marginTop: 2 }}>
-                {nextUp.track.key ?? '—'}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      {/* Transport — moved up so it sits right under the big stats */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+        <button onClick={onPrev} style={{
+          width: 52, padding: '12px 0', background: 'transparent',
+          color: fg, border: `1px solid ${border}`, borderRadius: 10,
+          fontSize: 16, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
+        }}>←</button>
+        <button onClick={onNext} style={{
+          flex: 1, padding: '12px',
+          background: accent, color: '#0E0C0A', border: 'none', borderRadius: 10,
+          fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+          fontFamily: 'inherit', cursor: 'pointer',
+        }}>Cue next →</button>
+      </div>
 
       {suggestions.length > 0 && (
         <>
@@ -401,13 +432,12 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
             fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
             textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
           }}>Mix suggestions · from this set</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
             {suggestions.map(s => {
               const harm = s.keyPenalty === 0 ? 'same key'
                 : s.keyPenalty === 1 ? 'harmonic'
                 : s.keyPenalty <= 2 ? 'close' : 'clash';
               const tag = s.bpmDiff === 0 ? 'exact BPM'
-                : s.bpmDiff <= 3 ? `±${s.bpmDiff} BPM`
                 : `±${s.bpmDiff} BPM`;
               const good = s.bpmDiff <= 4 && s.keyPenalty <= 1;
               return (
@@ -423,6 +453,13 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
                     title={s.record.title} artist={s.record.artist} size={42}
                     style={{ width: 42, height: 42, borderRadius: 4, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
+                    {s.track.n && (
+                      <div style={{
+                        fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5,
+                        fontWeight: 700, letterSpacing: 1,
+                        color: accent, marginBottom: 1,
+                      }}>{s.track.n}</div>
+                    )}
                     <div style={{ fontSize: 12, fontWeight: 600,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {s.track.title}
@@ -447,20 +484,98 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
         </>
       )}
 
-      <div style={{ display: 'flex', gap: 8, paddingBottom: 12 }}>
-        <button onClick={onPrev} style={{
-          width: 52, padding: '12px 0', background: 'transparent',
-          color: fg, border: `1px solid ${border}`, borderRadius: 10,
-          fontSize: 16, fontWeight: 700, fontFamily: 'inherit', cursor: 'pointer',
-        }}>←</button>
-        <button onClick={onNext} style={{
-          flex: 1, padding: '12px',
-          background: accent, color: '#0E0C0A', border: 'none', borderRadius: 10,
-          fontSize: 12, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
-          fontFamily: 'inherit', cursor: 'pointer',
-        }}>Cue next →</button>
-      </div>
+      {upNext.length > 0 && (
+        <>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
+          }}>Up next</div>
+          <div style={{
+            display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 16,
+          }}>
+            {upNext.map((u, k) => (
+              <div key={u.tid} onClick={() => onJumpTo && onJumpTo(u.qIdx)} style={{
+                display: 'flex', gap: 12, alignItems: 'center', padding: 10,
+                borderRadius: 10, background: soft, border: `1px solid ${border}`,
+                cursor: onJumpTo ? 'pointer' : 'default',
+                // Subtle hierarchy: the immediate next track gets slightly more visual weight.
+                opacity: k === 0 ? 1 : 0.88,
+              }}>
+                <RecordCover hue={u.record.cover.hue} shape={u.record.cover.shape}
+                  imageUrl={u.record.cover.image}
+                  title={u.record.title} artist={u.record.artist} size={k === 0 ? 48 : 40}
+                  style={{ width: k === 0 ? 48 : 40, height: k === 0 ? 48 : 40,
+                    borderRadius: 4, flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {u.track.n && (
+                    <div style={{
+                      fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                      fontWeight: 700, letterSpacing: 1,
+                      color: accent, marginBottom: 1,
+                    }}>{u.track.n}</div>
+                  )}
+                  <div style={{ fontSize: 12, fontWeight: 600,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {u.track.title}
+                  </div>
+                  <div style={{ fontSize: 10, opacity: 0.6,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {u.record.artist}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: k === 0 ? 16 : 13, fontWeight: 700,
+                    color: accent, lineHeight: 1 }}>
+                    {u.track.bpm ?? '—'}
+                  </div>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 10, opacity: 0.7, marginTop: 2 }}>
+                    {u.track.key ?? '—'}
+                  </div>
+                </div>
+                <PreviewBtn
+                  state={loadingTid === u.tid ? 'loading'
+                    : playingTid === u.tid ? 'playing'
+                    : missTid === u.tid ? 'miss' : 'idle'}
+                  size={28}
+                  onClick={(e) => { e.stopPropagation();
+                    togglePreview(u.tid, u.record.artist, u.track.title || u.record.title); }}
+                  accent={accent} fg={fg} border={border} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
+  );
+}
+
+// Compact play/pause circle for iTunes previews.
+// States: 'idle' | 'loading' | 'playing' | 'miss'
+function PreviewBtn({ state, size, onClick, accent, fg, border }) {
+  const s = size || 30;
+  let bg = 'transparent', color = fg, bd = border, content;
+  if (state === 'playing') { bg = accent; color = '#0E0C0A'; bd = accent;
+    content = <span style={{ fontSize: Math.round(s * 0.38), lineHeight: 1 }}>❚❚</span>; }
+  else if (state === 'loading') { content = <span style={{
+    fontFamily: 'JetBrains Mono, monospace', fontSize: Math.round(s * 0.32),
+    opacity: 0.65,
+  }}>…</span>; }
+  else if (state === 'miss') { bd = 'rgba(220,60,60,0.55)'; color = 'rgba(220,60,60,0.9)';
+    content = <span style={{ fontSize: Math.round(s * 0.38), lineHeight: 1 }}>✕</span>; }
+  else { content = <span style={{ fontSize: Math.round(s * 0.42), lineHeight: 1,
+    marginLeft: Math.round(s * 0.06) }}>▶</span>; }
+  return (
+    <button onClick={onClick} title="Preview 30s"
+      style={{
+        width: s, height: s, borderRadius: s / 2, flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: bg, color: color,
+        border: `1px solid ${bd}`, cursor: 'pointer',
+        padding: 0, fontFamily: 'inherit', fontWeight: 700,
+        transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+      }}>{content}</button>
   );
 }
 
@@ -481,11 +596,19 @@ function BigStat({ label, value, accent, small }) {
 
 // ─────────── Set screens: hub → builder/detail ───────────
 
-function SetTrackRow({ item, i, accent, soft, fg, border, onRemove }) {
+function SetTrackRow({ item, i, accent, soft, fg, border, onRemove, onMoveUp, onMoveDown }) {
   const r = item.record, t = item.track;
+  const reorderBtnStyle = (disabled) => ({
+    width: 24, height: 20, borderRadius: 5,
+    border: `1px solid ${border}`, background: 'transparent',
+    color: fg, cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.25 : 0.75,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    padding: 0, fontSize: 10, lineHeight: 1, flexShrink: 0,
+  });
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 10, padding: 10,
+      display: 'flex', alignItems: 'center', gap: 8, padding: 10,
       borderRadius: 8, background: soft,
     }}>
       <div style={{
@@ -507,6 +630,16 @@ function SetTrackRow({ item, i, accent, soft, fg, border, onRemove }) {
         <div style={{ fontFamily: 'JetBrains Mono, monospace',
           fontSize: 9, opacity: 0.6 }}>{t.key ?? '—'}</div>
       </div>
+      {(onMoveUp || onMoveDown) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+          <button disabled={!onMoveUp}
+            onClick={onMoveUp ? () => onMoveUp() : undefined}
+            title="Move up" style={reorderBtnStyle(!onMoveUp)}>▲</button>
+          <button disabled={!onMoveDown}
+            onClick={onMoveDown ? () => onMoveDown() : undefined}
+            title="Move down" style={reorderBtnStyle(!onMoveDown)}>▼</button>
+        </div>
+      )}
       {onRemove && (
         <button onClick={onRemove} title="Remove from set" style={{
           width: 24, height: 24, borderRadius: 12,
@@ -619,7 +752,7 @@ function MobileSetsHub({ savedSets, records, builderCount, currentSetName,
 }
 
 function MobileSetBuilder({ queue, currentSetName, setCurrentSetName, onBack,
-                             onSaveSet, onRemoveFromSet, onClearSet, onGoBrowse,
+                             onSaveSet, onRemoveFromSet, onReorderSet, onClearSet, onGoBrowse,
                              accent, fg, soft, border }) {
   const totalMin = queue.reduce((sum, item) => {
     const [m, s] = (item.track.len || '0:0').split(':').map(Number);
@@ -692,7 +825,9 @@ function MobileSetBuilder({ queue, currentSetName, setCurrentSetName, onBack,
           {queue.map((item, i) => (
             <SetTrackRow key={item.tid} item={item} i={i}
               accent={accent} soft={soft} fg={fg} border={border}
-              onRemove={() => onRemoveFromSet(item.tid)} />
+              onRemove={() => onRemoveFromSet(item.tid)}
+              onMoveUp={onReorderSet && i > 0 ? () => onReorderSet(i, i - 1) : null}
+              onMoveDown={onReorderSet && i < queue.length - 1 ? () => onReorderSet(i, i + 1) : null} />
           ))}
         </div>
       )}
@@ -790,11 +925,27 @@ function MobileSetDetail({ savedSet, records, onBack, onLoadSavedSet,
 
 function MobileCrates({ crates, records, openCrateId, setOpenCrateId, accent, fg, soft, border,
                         setTrackIds, onToggleTrack }) {
+  const [crateSearch, setCrateSearch] = React.useState('');
+  const [crateSort, setCrateSort] = React.useState('recent');
+  const [insideSearch, setInsideSearch] = React.useState('');
+  const [insideSort, setInsideSort] = React.useState('recent');
+  const [insideGenre, setInsideGenre] = React.useState('All');
   const open = crates.find(c => c.id === openCrateId);
+
+  // Reset inside-crate filters whenever we open a different crate
+  React.useEffect(() => {
+    setInsideSearch('');
+    setInsideSort('recent');
+    setInsideGenre('All');
+  }, [openCrateId]);
 
   if (open) {
     const openRecs = open.recordIds
       .map(id => records.find(r => r.id === id)).filter(Boolean);
+    const filtered = filterAndSort(openRecs,
+      { search: insideSearch, genre: insideGenre, sortBy: insideSort });
+    const insideGenres = ['All',
+      ...[...new Set(openRecs.map(r => r.genre).filter(Boolean))].sort()];
     return (
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px' }}>
         <button onClick={() => setOpenCrateId(null)} style={{
@@ -808,21 +959,54 @@ function MobileCrates({ crates, records, openCrateId, setOpenCrateId, accent, fg
         </div>
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1,
-          textTransform: 'uppercase', opacity: 0.55, marginBottom: 14,
-        }}>{openRecs.length} records</div>
-        <MobileRecordGrid records={openRecs} accent={accent} fg={fg} border={border}
+          textTransform: 'uppercase', opacity: 0.55, marginBottom: 10,
+        }}>{filtered.length} / {openRecs.length} records</div>
+
+        <MobileSearchRow search={insideSearch} setSearch={setInsideSearch}
+          placeholder="Search in this crate…"
+          fg={fg} soft={soft} border={border} />
+        <MobileFilterBar
+          sortBy={insideSort} setSortBy={setInsideSort}
+          genre={insideGenre} setGenre={setInsideGenre}
+          genres={insideGenres}
+          fg={fg} soft={soft} border={border} />
+
+        <MobileRecordGrid records={filtered} accent={accent} fg={fg} border={border}
           setTrackIds={setTrackIds} onToggleTrack={onToggleTrack} />
       </div>
     );
   }
+
+  const q = crateSearch.trim().toLowerCase();
+  let visibleCrates = q
+    ? crates.filter(c => c.name.toLowerCase().includes(q))
+    : crates;
+  visibleCrates = [...visibleCrates];
+  if (crateSort === 'name') {
+    visibleCrates.sort((a, b) =>
+      (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' }));
+  } else if (crateSort === 'size') {
+    visibleCrates.sort((a, b) => b.recordIds.length - a.recordIds.length);
+  }
+  // 'recent' = keep original order (list is already in created order)
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px' }}>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, marginBottom: 4 }}>Crates</div>
       <div style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1,
-        textTransform: 'uppercase', opacity: 0.55, marginBottom: 14,
-      }}>{crates.length} groups</div>
+        textTransform: 'uppercase', opacity: 0.55, marginBottom: 10,
+      }}>{visibleCrates.length} / {crates.length} groups</div>
+
+      {crates.length > 0 && (
+        <>
+          <MobileSearchRow search={crateSearch} setSearch={setCrateSearch}
+            placeholder="Search crates…"
+            fg={fg} soft={soft} border={border} />
+          <CrateSortBar sortBy={crateSort} setSortBy={setCrateSort}
+            fg={fg} soft={soft} border={border} />
+        </>
+      )}
 
       {crates.length === 0 ? (
         <div style={{
@@ -833,7 +1017,7 @@ function MobileCrates({ crates, records, openCrateId, setOpenCrateId, accent, fg
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 20 }}>
-          {crates.map(c => {
+          {visibleCrates.map(c => {
             const covers = c.recordIds.slice(0, 3)
               .map(id => records.find(r => r.id === id)).filter(Boolean);
             return (
@@ -887,12 +1071,13 @@ function MobileCrates({ crates, records, openCrateId, setOpenCrateId, accent, fg
 
 function MobileLibrary({ records, search, setSearch, accent, fg, soft, border,
                          setTrackIds, onToggleTrack }) {
-  const q = search.trim().toLowerCase();
-  const filtered = q ? records.filter(r =>
-    r.title.toLowerCase().includes(q) ||
-    r.artist.toLowerCase().includes(q) ||
-    (r.label || '').toLowerCase().includes(q)
-  ) : records;
+  const [sortBy, setSortBy] = React.useState('recent');
+  const [genre, setGenre] = React.useState('All');
+  const availableGenres = React.useMemo(
+    () => ['All', ...[...new Set(records.map(r => r.genre).filter(Boolean))].sort()],
+    [records]
+  );
+  const filtered = filterAndSort(records, { search, genre, sortBy });
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px' }}>
       <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, marginBottom: 4 }}>Library</div>
@@ -901,19 +1086,15 @@ function MobileLibrary({ records, search, setSearch, accent, fg, soft, border,
         textTransform: 'uppercase', opacity: 0.55, marginBottom: 10,
       }}>{filtered.length} / {records.length} records</div>
 
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '8px 12px', borderRadius: 8, background: soft,
-        border: `1px solid ${border}`, marginBottom: 12,
-      }}>
-        <span style={{ opacity: 0.5, fontSize: 12 }}>⌕</span>
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Search title, artist, label…"
-          style={{
-            flex: 1, background: 'transparent', border: 'none', outline: 'none',
-            color: fg, fontSize: 12, fontFamily: 'inherit',
-          }} />
-      </div>
+      <MobileSearchRow search={search} setSearch={setSearch}
+        placeholder="Search title, artist, label…"
+        fg={fg} soft={soft} border={border} />
+
+      <MobileFilterBar
+        sortBy={sortBy} setSortBy={setSortBy}
+        genre={genre} setGenre={setGenre}
+        genres={availableGenres}
+        fg={fg} soft={soft} border={border} />
 
       <MobileRecordGrid records={filtered} accent={accent} fg={fg} border={border}
         setTrackIds={setTrackIds} onToggleTrack={onToggleTrack} />
@@ -1021,6 +1202,114 @@ function MobileRecordGrid({ records, accent, fg, border, setTrackIds, onToggleTr
       })}
     </div>
   );
+}
+
+// ─────────── Small reusable filter/sort helpers ───────────
+
+function MobileSearchRow({ search, setSearch, placeholder, fg, soft, border }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '8px 12px', borderRadius: 8, background: soft,
+      border: `1px solid ${border}`, marginBottom: 8,
+    }}>
+      <span style={{ opacity: 0.5, fontSize: 12 }}>⌕</span>
+      <input value={search} onChange={e => setSearch(e.target.value)}
+        placeholder={placeholder || 'Search…'}
+        style={{
+          flex: 1, background: 'transparent', border: 'none', outline: 'none',
+          color: fg, fontSize: 16, fontFamily: 'inherit',
+        }} />
+    </div>
+  );
+}
+
+// Compact native selects so iOS/Android pops the system picker.
+// 16px font keeps iOS from auto-zooming on focus.
+function MobileFilterBar({ sortBy, setSortBy, genre, setGenre, genres, fg, soft, border }) {
+  const sortOptions = [
+    { id: 'recent', label: 'Recent' },
+    { id: 'title',  label: 'Title A–Z' },
+    { id: 'artist', label: 'Artist A–Z' },
+    { id: 'year',   label: 'Year' },
+    { id: 'bpm',    label: 'BPM' },
+    { id: 'rating', label: 'Rating' },
+  ];
+  const pillStyle = {
+    flex: 1, minWidth: 0,
+    display: 'flex', alignItems: 'center', gap: 6,
+    padding: '6px 10px', borderRadius: 8, background: soft,
+    border: `1px solid ${border}`,
+  };
+  const labelStyle = {
+    fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1,
+    textTransform: 'uppercase', opacity: 0.55, flexShrink: 0,
+  };
+  const selectStyle = {
+    flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none',
+    color: fg, fontSize: 16, fontFamily: 'inherit', fontWeight: 600,
+    appearance: 'none', WebkitAppearance: 'none',
+  };
+  return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+      <label style={pillStyle}>
+        <span style={labelStyle}>Sort</span>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={selectStyle}>
+          {sortOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+      </label>
+      {genres && genres.length > 1 && (
+        <label style={pillStyle}>
+          <span style={labelStyle}>Genre</span>
+          <select value={genre} onChange={e => setGenre(e.target.value)} style={selectStyle}>
+            {genres.map(g => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+// Sort bar for the crate-list view (not records — just by crate metadata).
+function CrateSortBar({ sortBy, setSortBy, fg, soft, border }) {
+  const options = [
+    { id: 'recent', label: 'Recent' },
+    { id: 'name',   label: 'Name A–Z' },
+    { id: 'size',   label: 'Record count' },
+  ];
+  return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+      <label style={{
+        flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6,
+        padding: '6px 10px', borderRadius: 8, background: soft,
+        border: `1px solid ${border}`,
+      }}>
+        <span style={{
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1,
+          textTransform: 'uppercase', opacity: 0.55, flexShrink: 0,
+        }}>Sort</span>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{
+          flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none',
+          color: fg, fontSize: 16, fontFamily: 'inherit', fontWeight: 600,
+          appearance: 'none', WebkitAppearance: 'none',
+        }}>
+          {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+}
+
+function filterAndSort(records, { search, genre, sortBy }) {
+  const q = (search || '').trim().toLowerCase();
+  let out = q ? records.filter(r =>
+    r.title.toLowerCase().includes(q) ||
+    r.artist.toLowerCase().includes(q) ||
+    (r.label || '').toLowerCase().includes(q)
+  ) : records;
+  if (genre && genre !== 'All') out = out.filter(r => r.genre === genre);
+  if (window.sortRecords && sortBy) out = window.sortRecords(out, sortBy);
+  return out;
 }
 
 Object.assign(window, { MobileApp });
