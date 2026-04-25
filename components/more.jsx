@@ -677,7 +677,7 @@ function TransitionHint({ fromBpm, toBpm, fromKey, toKey, accentColor }) {
 
 // ─────────── Saved set page ───────────
 
-function SavedSetPage({ savedSet, records, onRename, onUpdateTracks, onUpdateGigs, onDelete, onLoadToBuilder, onLaunchGig }) {
+function SavedSetPage({ savedSet, records, onRename, onUpdateTracks, onUpdateGigs, onTogglePublic, onDelete, onLoadToBuilder, onLaunchGig }) {
   const [showTimeline, setShowTimeline] = React.useState(false);
   if (!savedSet) {
     return (
@@ -737,10 +737,24 @@ function SavedSetPage({ savedSet, records, onRename, onUpdateTracks, onUpdateGig
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
             textTransform: 'uppercase', color: 'var(--dim)',
-            display: 'flex', alignItems: 'center', gap: 8,
+            display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
           }}>
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />
             Saved set · {new Date(savedSet.createdAt || Date.now()).toLocaleDateString()}
+            {onTogglePublic && (
+              <button onClick={() => onTogglePublic(savedSet.id, !savedSet.is_public)}
+                title={savedSet.is_public
+                  ? 'Public — visible on your DJ profile. Click to make private.'
+                  : 'Private — only you can see it. Click to feature it on your public profile.'}
+                style={{
+                  marginLeft: 4, padding: '2px 8px', borderRadius: 4,
+                  background: savedSet.is_public ? 'var(--accent)' : 'transparent',
+                  color: savedSet.is_public ? 'var(--on-accent)' : 'var(--dim)',
+                  border: '1px solid ' + (savedSet.is_public ? 'var(--accent)' : 'var(--border)'),
+                  fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700,
+                  letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+                }}>{savedSet.is_public ? 'Public' : 'Private'}</button>
+            )}
           </div>
           <input value={savedSet.name}
             onChange={e => onRename(savedSet.id, e.target.value)}

@@ -224,6 +224,23 @@
 </script>
 
 <script type="text/babel">
+// Tiny hash-based router. Returns { kind: 'profile', userId } for #u/{user_id}
+// URLs, otherwise { kind: 'app' }. Updates whenever the hash changes so
+// navigation feels native (back button, bookmarks, manual edits all work).
+function useHashRoute() {
+  const parse = (hash) => {
+    const m = (hash || '').match(/^#u\/([^/?]+)/);
+    return m ? { kind: 'profile', userId: decodeURIComponent(m[1]) } : { kind: 'app' };
+  };
+  const [route, setRoute] = React.useState(() => parse(window.location.hash));
+  React.useEffect(() => {
+    const onHash = () => setRoute(parse(window.location.hash));
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  return route;
+}
+
 function Root() {
   const [tweaks, setTweaks] = React.useState(() => {
     const saved = localStorage.getItem('cs-tweaks');
@@ -281,6 +298,20 @@ function Root() {
     setTweaks(next);
     window.parent.postMessage({ type: '__edit_mode_set_keys', edits: patch }, '*');
   };
+
+  // Hash-based routing for public profiles. /#u/{user_id} is reachable
+  // signed-out (RLS allows anon to read public/discoverable rows) and
+  // overrides the normal session-gated app shell.
+  const route = useHashRoute();
+
+  if (route.kind === 'profile') {
+    return (
+      <div className={`app ${tweaks.theme}`}>
+        <PublicProfilePage userId={route.userId} viewerSession={session}
+          onExit={() => { window.location.hash = ''; }} />
+      </div>
+    );
+  }
 
   if (session === undefined) {
     return (

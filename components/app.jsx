@@ -128,6 +128,11 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   const updateSavedSetGigs = (id, gigs) => {
     setSavedSets(ss => ss.map(s => s.id === id ? { ...s, gigs } : s));
   };
+  // Flip is_public on a saved set so it does/doesn't surface on the public
+  // DJ profile. Snake_case key matches the SQL RLS path data->>'is_public'.
+  const toggleSavedSetPublic = (id, isPublic) => {
+    setSavedSets(ss => ss.map(s => s.id === id ? { ...s, is_public: !!isPublic } : s));
+  };
 
   // Gig CRUD — operate on the new top-level gigs state. Phase 1's migration
   // already lifted nested saved_sets.gigs[] into here; from now on this is
@@ -775,7 +780,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           )}
           {view === 'profile' && (
             <ProfilePage profile={profile} setProfile={setProfile}
-              records={records} savedSets={savedSets}
+              records={records} savedSets={savedSets} gigs={gigs}
               user={user} onSignOut={onSignOut}
               onRetryBpmAnalysis={() => {
                 // Clear the bpmTried flag so the background auto-analyzer
@@ -811,6 +816,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               onRename={renameSavedSet}
               onUpdateTracks={updateSavedSetTracks}
               onUpdateGigs={updateSavedSetGigs}
+              onTogglePublic={toggleSavedSetPublic}
               onDelete={deleteSavedSet}
               onLoadToBuilder={loadIntoBuilder}
               onLaunchGig={(resolved) => { setGigResolved(resolved); setGigMode(true); }} />

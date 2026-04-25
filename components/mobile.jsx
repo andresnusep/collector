@@ -86,7 +86,8 @@ function MobileApp({ records, set, crates, savedSets, gigs, currentSetName, setC
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px 20px' }}>
             <ProfilePage profile={profile} setProfile={setProfile}
-              records={records} savedSets={savedSets || []} />
+              records={records} savedSets={savedSets || []} gigs={gigs || []}
+              user={user} onSignOut={onSignOut} />
             {onSignOut && (
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${border}` }}>
                 <div style={{ fontSize: 11, opacity: 0.55, marginBottom: 6 }}>
