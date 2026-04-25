@@ -11,14 +11,16 @@
 <meta property="og:description" content="Catalog your records. Organize crates. Build sets. Log gigs." />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<!-- Brand assets. kollectorfav is the dark mark used on light browser
-     chrome; kollectorfav-light is the inverted variant for dark chrome.
-     kollectorlogo is the full wordmark used for link previews. -->
-<link rel="icon" type="image/png" href="kollectorfav.png"
+<!-- Brand assets. WebP versions ship as primary (60% smaller than PNG); PNGs
+     remain as the universally-supported fallback for older browsers and as
+     the og:image source (some link-preview crawlers don't grok WebP yet).
+     kollectorfav is the dark mark for light browser chrome; -light is the
+     inverted variant for dark chrome. -->
+<link rel="icon" type="image/webp" href="kollectorfav.webp"
   media="(prefers-color-scheme: light)" />
-<link rel="icon" type="image/png" href="kollectorfav-light.png"
+<link rel="icon" type="image/webp" href="kollectorfav-light.webp"
   media="(prefers-color-scheme: dark)" />
-<!-- Fallback for browsers that ignore the media attribute on icons. -->
+<!-- PNG fallbacks for browsers that ignore the media attribute or webp. -->
 <link rel="icon" type="image/png" href="kollectorfav.png" />
 <link rel="apple-touch-icon" href="kollectorfav.png" />
 <meta property="og:image" content="https://kollector.studio/kollectorlogo.png" />
@@ -184,6 +186,7 @@
 <script src="data/records.js"></script>
 <script src="data/audio-store.js"></script>
 <script type="text/babel" src="frames/ios-frame.jsx"></script>
+<script type="text/babel" src="components/error-boundary.jsx"></script>
 <script type="text/babel" src="components/atoms.jsx"></script>
 <script type="text/babel" src="components/covers.jsx"></script>
 <script type="text/babel" src="components/collection.jsx"></script>
@@ -358,7 +361,9 @@ function Root() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ErrorBoundary><Root /></ErrorBoundary>
+);
 </script>
 
 </body>

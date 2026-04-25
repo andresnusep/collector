@@ -350,13 +350,25 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       }
 
       // Push anything that only exists locally so the cloud catches up.
-      await Promise.all([
-        !cloudProfile && window.Sync.upsertProfile(profile),
-        !cloudWorkspace && window.Sync.upsertWorkspace({ set, activeSetId, currentSetName }),
-        ...localOnly(records,   cloudRecords).map(r => window.Sync.upsertRecord(r)),
-        ...localOnly(savedSets, cloudSets).map(s => window.Sync.upsertSavedSet(s)),
-        ...localOnly(crates,    cloudCrates).map(c => window.Sync.upsertCrate(c)),
-      ].filter(Boolean));
+      // Guard with a short-lived localStorage lock so two tabs opened at the
+      // same time don't both fire the same uploads. The first tab to land
+      // here grabs the lock; any other tab sees the fresh lock and skips
+      // (its writes will reach the cloud through write-through anyway, but
+      // the bulk localOnly upload happens once across all open tabs).
+      const HYDRATE_LOCK_KEY = `cs-hydrate-lock-${user.id}`;
+      const HYDRATE_TTL_MS = 15000;
+      const lockRaw = localStorage.getItem(HYDRATE_LOCK_KEY);
+      const lockFresh = lockRaw && (Date.now() - Number(lockRaw)) < HYDRATE_TTL_MS;
+      if (!lockFresh) {
+        localStorage.setItem(HYDRATE_LOCK_KEY, String(Date.now()));
+        await Promise.all([
+          !cloudProfile && window.Sync.upsertProfile(profile),
+          !cloudWorkspace && window.Sync.upsertWorkspace({ set, activeSetId, currentSetName }),
+          ...localOnly(records,   cloudRecords).map(r => window.Sync.upsertRecord(r)),
+          ...localOnly(savedSets, cloudSets).map(s => window.Sync.upsertSavedSet(s)),
+          ...localOnly(crates,    cloudCrates).map(c => window.Sync.upsertCrate(c)),
+        ].filter(Boolean));
+      }
 
       // Prime refs so write-through doesn't re-upsert what we just merged.
       // Use the cleaned versions so the diff effect doesn't double-fire the
@@ -368,6 +380,44 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     })();
     return () => { cancelled = true; };
   }, [user?.id]);
+
+  // Cross-tab sync: when another tab writes, refetch the affected scope so
+  // the user sees their edits appear without a manual refresh. Only listens
+  // after hydration so we don't double-hydrate on boot.
+  React.useEffect(() => {
+    if (!hydrated || !user) return;
+    let inflight = false;
+    const refresh = async (scope) => {
+      if (inflight) return;
+      inflight = true;
+      try {
+        if (scope === 'records') {
+          const cloud = await window.Sync.fetchRecords();
+          setRecords(cloud);
+          prevRecordsRef.current = cloud;
+        } else if (scope === 'savedSets') {
+          const cloud = await window.Sync.fetchSavedSets();
+          setSavedSets(cloud);
+          prevSetsRef.current = cloud;
+        } else if (scope === 'crates') {
+          const cloud = await window.Sync.fetchCrates();
+          setCrates(cloud);
+          prevCratesRef.current = cloud;
+        } else if (scope === 'workspace') {
+          const cloud = await window.Sync.fetchWorkspace();
+          if (cloud) {
+            if (Array.isArray(cloud.set)) setSet(cloud.set);
+            if (typeof cloud.currentSetName === 'string') setCurrentSetName(cloud.currentSetName);
+            if (cloud.activeSetId !== undefined) setActiveSetId(cloud.activeSetId);
+          }
+        } else if (scope === 'profile') {
+          const cloud = await window.Sync.fetchProfile();
+          if (cloud) setProfile(window.migrateProfile(cloud));
+        }
+      } finally { inflight = false; }
+    };
+    return window.Sync.onPeerChange(refresh);
+  }, [hydrated, user?.id]);
 
   // Write-through: profile (debounced)
   const upsertProfileDebounced = React.useMemo(
@@ -738,16 +788,21 @@ function Sidebar({ view, setView, set, records, onOpenImport, onAddRecord, onAna
       overflow: 'hidden',
     }}>
       {/* Wordmark — the brand-logo class flips luminance in dark/warm themes
-          while keeping STUDIO yellow (see index.html). */}
+          while keeping STUDIO yellow (see index.html). <picture> serves WebP
+          where supported (60% smaller) and falls back to PNG elsewhere. */}
       <div style={{ marginBottom: 18 }}>
-        <img src="kollectorlogo.png" alt="Kollector Studio"
-          className="brand-logo"
-          style={{ maxWidth: 120, width: '70%', height: 'auto', display: 'block' }} />
+        <picture>
+          <source srcSet="kollectorlogo.webp" type="image/webp" />
+          <img src="kollectorlogo.png" alt="Kollector Studio"
+            className="brand-logo"
+            style={{ maxWidth: 120, width: '70%', height: 'auto', display: 'block' }} />
+        </picture>
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
           textTransform: 'uppercase', color: 'var(--dim)', marginTop: 8,
         }}>For vinyl DJs · v1.0 BETA</div>
       </div>
+      {/* end wordmark */}
 
       {/* Profile chip — click to open profile page (includes sign out) */}
       <button onClick={() => setView('profile')} style={{

@@ -39,21 +39,41 @@ async function fetchSingleton(table) {
   return data?.data ?? null;
 }
 
-// Domain-specific helpers (just thin wrappers so callers read cleanly)
+// Cross-tab broadcast channel. Whenever this tab writes to a domain table,
+// it announces which collection changed so peer tabs can re-fetch and stay
+// in sync without having to poll. Falls back to a no-op stub on browsers
+// that lack BroadcastChannel (older Safari).
+const tabChannel = (typeof BroadcastChannel !== 'undefined')
+  ? new BroadcastChannel('cs-data')
+  : { postMessage: () => {}, addEventListener: () => {}, close: () => {} };
+
+function announce(scope) {
+  try { tabChannel.postMessage({ scope, t: Date.now() }); } catch {}
+}
+
+// Domain-specific helpers (just thin wrappers so callers read cleanly).
+// Each write announces its scope so other tabs of the same user can
+// re-fetch the affected collection.
 const Sync = {
   fetchProfile:     () => fetchSingleton('profiles'),
-  upsertProfile:    (p) => upsertSingleton('profiles', p),
+  upsertProfile:    async (p)  => { await upsertSingleton('profiles', p); announce('profile'); },
   fetchRecords:     () => fetchAll('records'),
-  upsertRecord:     (r) => upsertRow('records', r.id, r),
-  deleteRecord:     (id) => deleteRow('records', id),
+  upsertRecord:     async (r)  => { await upsertRow('records', r.id, r); announce('records'); },
+  deleteRecord:     async (id) => { await deleteRow('records', id); announce('records'); },
   fetchSavedSets:   () => fetchAll('saved_sets'),
-  upsertSavedSet:   (s) => upsertRow('saved_sets', s.id, s),
-  deleteSavedSet:   (id) => deleteRow('saved_sets', id),
+  upsertSavedSet:   async (s)  => { await upsertRow('saved_sets', s.id, s); announce('savedSets'); },
+  deleteSavedSet:   async (id) => { await deleteRow('saved_sets', id); announce('savedSets'); },
   fetchCrates:      () => fetchAll('crates'),
-  upsertCrate:      (c) => upsertRow('crates', c.id, c),
-  deleteCrate:      (id) => deleteRow('crates', id),
+  upsertCrate:      async (c)  => { await upsertRow('crates', c.id, c); announce('crates'); },
+  deleteCrate:      async (id) => { await deleteRow('crates', id); announce('crates'); },
   fetchWorkspace:   () => fetchSingleton('workspace'),
-  upsertWorkspace:  (w) => upsertSingleton('workspace', w),
+  upsertWorkspace:  async (w)  => { await upsertSingleton('workspace', w); announce('workspace'); },
+  // Subscribe to peer-tab writes. Returns an unsubscribe fn.
+  onPeerChange: (handler) => {
+    const fn = (e) => { if (e && e.data && e.data.scope) handler(e.data.scope); };
+    tabChannel.addEventListener('message', fn);
+    return () => tabChannel.removeEventListener('message', fn);
+  },
 };
 
 // Diff helper: for array state, sync only changed/added/removed items.
