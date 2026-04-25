@@ -321,7 +321,7 @@ function ProfileCalendarPanel({ gigs, isOwner }) {
     return (
       <EmptyPanel>
         {isOwner
-          ? 'No public gigs yet. Open the Calendar tab in the workspace and toggle "Make this gig public" on a gig to surface it here.'
+          ? 'No gigs yet. Add one from the Calendar tab in the workspace, then toggle "Make this gig public" to surface it on your public profile.'
           : 'No public gigs yet.'}
       </EmptyPanel>
     );
@@ -336,16 +336,16 @@ function ProfileCalendarPanel({ gigs, isOwner }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       {upcoming.length > 0 && (
-        <ProfileGigSection title="Upcoming" gigs={upcoming} />
+        <ProfileGigSection title="Upcoming" gigs={upcoming} isOwner={isOwner} />
       )}
       {past.length > 0 && (
-        <ProfileGigSection title="Past" gigs={past} />
+        <ProfileGigSection title="Past" gigs={past} isOwner={isOwner} />
       )}
     </div>
   );
 }
 
-function ProfileGigSection({ title, gigs }) {
+function ProfileGigSection({ title, gigs, isOwner }) {
   return (
     <div>
       <div style={{
@@ -353,18 +353,21 @@ function ProfileGigSection({ title, gigs }) {
         textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 8,
       }}>{title} · {gigs.length}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {gigs.map(g => <ProfileGigRow key={g.id} gig={g} />)}
+        {gigs.map(g => <ProfileGigRow key={g.id} gig={g} isOwner={isOwner} />)}
       </div>
     </div>
   );
 }
 
-function ProfileGigRow({ gig }) {
+function ProfileGigRow({ gig, isOwner }) {
   return (
     <div style={{
       display: 'flex', gap: 14, alignItems: 'flex-start',
       padding: '12px 14px', borderRadius: 10,
       background: 'var(--panel)', border: '1px solid var(--border)',
+      // Faded look for owner-visible private gigs so they can see at a glance
+      // which entries are not on their public profile.
+      opacity: isOwner && !gig.is_public ? 0.6 : 1,
     }}>
       <div style={{
         width: 80, flexShrink: 0,
@@ -373,8 +376,17 @@ function ProfileGigRow({ gig }) {
         textTransform: 'uppercase',
       }}>{gig.playedAt ? formatDate(gig.playedAt) : '—'}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3 }}>
-          {gig.venue || 'Untitled venue'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3 }}>
+            {gig.venue || 'Untitled venue'}
+          </div>
+          {isOwner && !gig.is_public && (
+            <span style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5, fontWeight: 700,
+              padding: '2px 6px', borderRadius: 3, letterSpacing: 1,
+              border: '1px solid var(--border)', color: 'var(--dim)', textTransform: 'uppercase',
+            }}>Private</span>
+          )}
         </div>
         {gig.location && (
           <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 2 }}>{gig.location}</div>
@@ -390,32 +402,251 @@ function ProfileGigRow({ gig }) {
 }
 
 function ProfileSetsPanel({ sets, isOwner }) {
+  // Shared audio element + state across every card so only one preview plays
+  // at a time. Lives at the panel level rather than per-card so toggling a
+  // different track stops whatever was playing without each card needing to
+  // know about its siblings.
+  const audioRef = React.useRef(null);
+  const [playingTid, setPlayingTid] = React.useState(null);
+  const [loadingTid, setLoadingTid] = React.useState(null);
+  const [missTid, setMissTid] = React.useState(null);
+
+  const stop = React.useCallback(() => {
+    const a = audioRef.current;
+    if (a) { try { a.pause(); a.currentTime = 0; } catch {} }
+    setPlayingTid(null);
+  }, []);
+
+  const togglePreview = React.useCallback(async (tid, artist, title) => {
+    if (playingTid === tid) { stop(); return; }
+    if (!window.iTunesPreview) return;
+    stop();
+    setLoadingTid(tid);
+    try {
+      const url = await window.iTunesPreview.getPreview(tid, artist, title);
+      if (!url) {
+        setMissTid(tid);
+        setTimeout(() => setMissTid(m => (m === tid ? null : m)), 1500);
+        return;
+      }
+      const a = audioRef.current;
+      if (!a) return;
+      a.src = url;
+      try { await a.play(); setPlayingTid(tid); }
+      catch { setPlayingTid(null); }
+    } finally {
+      setLoadingTid(null);
+    }
+  }, [playingTid, stop]);
+
+  React.useEffect(() => () => stop(), [stop]);
+
   if (sets.length === 0) {
     return (
       <EmptyPanel>
         {isOwner
-          ? 'No public sets yet. Open one of your saved sets and toggle "Make this set public" to feature it here.'
+          ? 'No sets yet. Save one from the Set Builder, then toggle "Public" on its detail page to feature it here.'
           : 'No public sets yet.'}
       </EmptyPanel>
     );
   }
+
   return (
-    <div style={{ display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
-      {sets.map(s => (
-        <div key={s.id} style={{
-          padding: 14, borderRadius: 10,
-          background: 'var(--panel)', border: '1px solid var(--border)',
-        }}>
-          <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3,
-            marginBottom: 6 }}>{s.name || 'Untitled set'}</div>
+    <>
+      <audio ref={audioRef} preload="none" style={{ display: 'none' }}
+        onEnded={() => setPlayingTid(null)} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {sets.map(s => (
+          <ProfileSetCard key={s.id} set={s} isOwner={isOwner}
+            playingTid={playingTid} loadingTid={loadingTid} missTid={missTid}
+            onTogglePreview={togglePreview} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function ProfileSetCard({ set, isOwner, playingTid, loadingTid, missTid, onTogglePreview }) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  // Resolve trackIds via the global parseTrackId. Works on the in-app /profile
+  // (records are loaded) and on the public route only when the visitor
+  // happens to be the owner — a non-owner viewing the public URL won't have
+  // the records populated, so resolved is empty and we fall back to a
+  // placeholder count + a friendly note.
+  const resolved = React.useMemo(() => {
+    if (!window.parseTrackId) return [];
+    return (set.trackIds || []).map(tid => {
+      const p = window.parseTrackId(tid);
+      return p ? { tid, ...p } : null;
+    }).filter(Boolean);
+  }, [set]);
+
+  const trackCount = (set.trackIds || []).length;
+  const hasResolved = resolved.length > 0;
+
+  // Average BPM across resolved tracks. Skip nulls so we don't drag the
+  // average down with un-analyzed tracks.
+  const avgBpm = React.useMemo(() => {
+    const bs = resolved.map(r => r.track.bpm).filter(b => b != null);
+    return bs.length ? Math.round(bs.reduce((a, b) => a + b, 0) / bs.length) : null;
+  }, [resolved]);
+
+  const totalMin = React.useMemo(() => {
+    if (!hasResolved) return null;
+    const m = resolved.reduce((sum, r) => {
+      const [mm, ss] = (r.track.len || '0:00').split(':').map(Number);
+      return sum + (mm || 0) + (ss || 0) / 60;
+    }, 0);
+    return Math.floor(m);
+  }, [resolved, hasResolved]);
+
+  const dim = isOwner && !set.is_public;
+
+  return (
+    <div style={{
+      borderRadius: 10, background: 'var(--panel)',
+      border: `1px solid ${expanded ? 'var(--accent)' : 'var(--border)'}`,
+      overflow: 'hidden', opacity: dim ? 0.65 : 1,
+      transition: 'border-color 0.15s, opacity 0.15s',
+    }}>
+      <button onClick={() => setExpanded(e => !e)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+        padding: '14px 16px', background: 'transparent', border: 'none',
+        color: 'var(--fg)', fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+      }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+            marginBottom: 4 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {set.name || 'Untitled set'}
+            </div>
+            {isOwner && !set.is_public && (
+              <span style={{
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5, fontWeight: 700,
+                padding: '2px 6px', borderRadius: 3, letterSpacing: 1,
+                border: '1px solid var(--border)', color: 'var(--dim)', textTransform: 'uppercase',
+              }}>Private</span>
+            )}
+          </div>
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1,
             textTransform: 'uppercase', color: 'var(--dim)',
-          }}>{(s.trackIds || []).length} tracks</div>
+          }}>
+            {trackCount} track{trackCount === 1 ? '' : 's'}
+            {totalMin != null && ` · ${totalMin} min`}
+          </div>
         </div>
-      ))}
+
+        {avgBpm != null && (
+          <div style={{
+            display: 'flex', alignItems: 'baseline', gap: 4,
+            padding: '5px 10px', borderRadius: 999,
+            background: 'var(--hover)', border: '1px solid var(--border)',
+            fontFamily: 'JetBrains Mono, monospace',
+            color: 'var(--fg)', flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>{avgBpm}</span>
+            <span style={{ fontSize: 9, color: 'var(--dim)', letterSpacing: 1,
+              textTransform: 'uppercase' }}>avg BPM</span>
+          </div>
+        )}
+        <span style={{
+          opacity: 0.4, fontSize: 12, flexShrink: 0,
+          transform: expanded ? 'rotate(180deg)' : 'none',
+          transition: 'transform 0.15s',
+        }}>▾</span>
+      </button>
+
+      {expanded && (
+        <div style={{
+          borderTop: '1px solid var(--border)',
+          padding: '6px 10px 10px',
+        }}>
+          {hasResolved ? (
+            resolved.map((r, i) => (
+              <ProfileTrackRow key={r.tid} item={r} idx={i}
+                isPlaying={playingTid === r.tid}
+                isLoading={loadingTid === r.tid}
+                isMiss={missTid === r.tid}
+                onTogglePreview={onTogglePreview} />
+            ))
+          ) : (
+            <div style={{
+              padding: 14, textAlign: 'center', fontSize: 11,
+              color: 'var(--dim)', fontStyle: 'italic',
+            }}>
+              {trackCount} track{trackCount === 1 ? '' : 's'}. Sign in to see the
+              full track list and previews.
+            </div>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+function ProfileTrackRow({ item, idx, isPlaying, isLoading, isMiss, onTogglePreview }) {
+  const r = item.record, t = item.track;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '7px 6px',
+      borderBottom: '1px solid var(--border)',
+    }}>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10, color: 'var(--dim)',
+        width: 22, textAlign: 'right', flexShrink: 0,
+      }}>{String(idx + 1).padStart(2, '0')}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 13, fontWeight: 600,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{t.title}</div>
+        <div style={{
+          fontSize: 11, color: 'var(--dim)',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{r.artist}</div>
+      </div>
+      <div style={{ textAlign: 'right', flexShrink: 0,
+        fontFamily: 'JetBrains Mono, monospace' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
+          {t.bpm ?? '—'}
+        </div>
+        <div style={{ fontSize: 9, color: 'var(--dim)' }}>
+          {t.key ?? '—'}
+        </div>
+      </div>
+      <ProfilePreviewBtn
+        state={isLoading ? 'loading' : isPlaying ? 'playing' : isMiss ? 'miss' : 'idle'}
+        onClick={() => onTogglePreview(item.tid, r.artist, t.title || r.title)} />
+    </div>
+  );
+}
+
+function ProfilePreviewBtn({ state, onClick }) {
+  let bg = 'transparent', color = 'var(--fg)', bd = 'var(--border)', content;
+  if (state === 'playing') {
+    bg = 'var(--accent)'; color = 'var(--on-accent)'; bd = 'var(--accent)';
+    content = <span style={{ fontSize: 11, lineHeight: 1 }}>❚❚</span>;
+  } else if (state === 'loading') {
+    content = <span style={{ fontSize: 11, opacity: 0.6 }}>…</span>;
+  } else if (state === 'miss') {
+    bd = 'rgba(220,60,60,0.55)'; color = 'rgba(220,60,60,0.9)';
+    content = <span style={{ fontSize: 11, lineHeight: 1 }}>✕</span>;
+  } else {
+    content = <span style={{ fontSize: 12, lineHeight: 1, marginLeft: 1 }}>▶</span>;
+  }
+  return (
+    <button onClick={onClick} title="Preview" style={{
+      width: 28, height: 28, borderRadius: 14, flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: bg, color: color,
+      border: '1px solid ' + bd, cursor: 'pointer',
+      padding: 0, fontFamily: 'inherit',
+      transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+    }}>{content}</button>
   );
 }
 
