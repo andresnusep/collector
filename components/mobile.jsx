@@ -51,15 +51,10 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
         flexShrink: 0, height: 56, padding: '10px 18px 6px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <img src="kollectorfav.png" alt=""
-            style={{ width: 22, height: 22, borderRadius: 4,
-              background: fg, padding: 2 }} />
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
-            textTransform: 'uppercase', opacity: 0.55,
-          }}>Kollector Studio</div>
-        </div>
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
+          textTransform: 'uppercase', opacity: 0.55,
+        }}>Kollector Studio</div>
         {profile && (
           <ProfileAvatar profile={profile} size={32}
             onClick={() => setProfileOpen(true)} />
