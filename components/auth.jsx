@@ -70,6 +70,7 @@ function SignInScreen({ tweaks }) {
           {/* Full wordmark logo. The PNG has its own internal padding, so no
               extra margin needed. Capped width keeps it readable on phones. */}
           <img src="kollectorlogo.png" alt="Kollector Studio"
+            className="brand-logo"
             style={{ maxWidth: 220, width: '60%', height: 'auto', display: 'block',
               margin: '0 auto' }} />
           <div style={{

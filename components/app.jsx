@@ -707,16 +707,15 @@ function Sidebar({ view, setView, set, records, onOpenImport, onAddRecord, onAna
       padding: '20px 16px', display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
     }}>
-      {/* Wordmark */}
+      {/* Wordmark — the brand-logo class flips luminance in dark/warm themes
+          while keeping STUDIO yellow (see index.html). */}
       <div style={{ marginBottom: 18 }}>
-        <div style={{
-          fontSize: 22, fontWeight: 800, letterSpacing: -0.8, lineHeight: 0.95,
-        }}>
-          Kollector<br /><span style={{ color: 'var(--accent)' }}>Studio</span><span style={{ color: 'var(--accent)' }}>.</span>
-        </div>
+        <img src="kollectorlogo.png" alt="Kollector Studio"
+          className="brand-logo"
+          style={{ width: '100%', maxWidth: 180, height: 'auto', display: 'block' }} />
         <div style={{
           fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
-          textTransform: 'uppercase', color: 'var(--dim)', marginTop: 6,
+          textTransform: 'uppercase', color: 'var(--dim)', marginTop: 8,
         }}>For vinyl DJs · v1.0 BETA</div>
       </div>
 

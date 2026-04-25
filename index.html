@@ -11,8 +11,14 @@
 <meta property="og:description" content="Catalog your records. Organize crates. Build sets. Log gigs." />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="referrer" content="strict-origin-when-cross-origin" />
-<!-- Brand assets. kollectorfav is the square disc mark; kollectorlogo is the
-     full wordmark used for link previews. -->
+<!-- Brand assets. kollectorfav is the dark mark used on light browser
+     chrome; kollectorfav-light is the inverted variant for dark chrome.
+     kollectorlogo is the full wordmark used for link previews. -->
+<link rel="icon" type="image/png" href="kollectorfav.png"
+  media="(prefers-color-scheme: light)" />
+<link rel="icon" type="image/png" href="kollectorfav-light.png"
+  media="(prefers-color-scheme: dark)" />
+<!-- Fallback for browsers that ignore the media attribute on icons. -->
 <link rel="icon" type="image/png" href="kollectorfav.png" />
 <link rel="apple-touch-icon" href="kollectorfav.png" />
 <meta property="og:image" content="https://kollector.studio/kollectorlogo.png" />
@@ -62,6 +68,15 @@
 
   button { font-family: inherit; }
   input { font-family: inherit; }
+
+  /* Brand logo. The PNG is dark-on-transparent (KOLLECTOR in black, STUDIO in
+     yellow). On light themes it renders natively. On dark themes we flip the
+     luminance with invert() while preserving the yellow STUDIO via a hue
+     rotation — invert+hue-rotate(180) is a no-op for fully saturated yellow,
+     so STUDIO stays yellow while the black KOLLECTOR becomes cream. */
+  .app.dark .brand-logo, .app.warm .brand-logo {
+    filter: invert(1) hue-rotate(180deg);
+  }
 
   /* iOS zooms <input>/<textarea>/<select> on focus if font-size < 16px. Force
      16px on mobile viewports to disable the zoom, overriding inline styles
