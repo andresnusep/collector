@@ -734,18 +734,32 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           )}
         </div>
 
-        {selected && (
-          <RecordDetail record={selected} onClose={() => setSelected(null)}
-            onAddTrack={toggleTrack} isTrackInSet={isTrackInSet}
-            onAddAllTracks={toggleAllTracks} allRecords={records}
-            onEdit={() => openEditRecord(selected)}
-            crates={crates} onAddToCrate={addToCrate} onRemoveFromCrate={removeFromCrate}
-            onNewCrate={newCrate}
-            onRateTrack={rateTrack}
-            onRefreshTrackBpm={refreshTrackBpm}
-            onRefreshDiscogs={refreshDiscogsRecord}
-            onRefreshAlbumBpms={refreshAlbumBpms} />
-        )}
+        {selected && (() => {
+          // Walk the currently-visible (filtered + sorted) list so prev/next
+          // mirror what the user sees in the grid. Falls back to records if
+          // the selected record isn't in the visible list (e.g. opened
+          // straight from a search hit that the current filter excludes).
+          const visible = sortedFiltered.some(r => r.id === selected.id)
+            ? sortedFiltered : records;
+          const idx = visible.findIndex(r => r.id === selected.id);
+          const prev = idx > 0 ? visible[idx - 1] : null;
+          const next = idx >= 0 && idx < visible.length - 1 ? visible[idx + 1] : null;
+          return (
+            <RecordDetail record={selected} onClose={() => setSelected(null)}
+              onPrev={prev ? () => setSelected(prev) : null}
+              onNext={next ? () => setSelected(next) : null}
+              positionLabel={idx >= 0 ? `${idx + 1} / ${visible.length}` : null}
+              onAddTrack={toggleTrack} isTrackInSet={isTrackInSet}
+              onAddAllTracks={toggleAllTracks} allRecords={records}
+              onEdit={() => openEditRecord(selected)}
+              crates={crates} onAddToCrate={addToCrate} onRemoveFromCrate={removeFromCrate}
+              onNewCrate={newCrate}
+              onRateTrack={rateTrack}
+              onRefreshTrackBpm={refreshTrackBpm}
+              onRefreshDiscogs={refreshDiscogsRecord}
+              onRefreshAlbumBpms={refreshAlbumBpms} />
+          );
+        })()}
       </div>
 
       <DiscogsImportModal open={importOpen}

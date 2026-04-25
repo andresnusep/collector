@@ -1,6 +1,6 @@
 // Record detail drawer — track-level add to set
 
-function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, onRateTrack, onRefreshTrackBpm, onRefreshDiscogs, onRefreshAlbumBpms }) {
+function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, onRateTrack, onRefreshTrackBpm, onRefreshDiscogs, onRefreshAlbumBpms }) {
   const [playing, setPlaying] = React.useState(null);
   const [progress, setProgress] = React.useState({});
   const [audioMap, setAudioMap] = React.useState({}); // trackId -> object URL
@@ -98,6 +98,24 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
     await window.AudioStore.remove(tid);
   };
 
+  // Left/right arrow keys navigate between records — but only when the user
+  // isn't typing in an input (form fields, the rating notes, etc.). Stays
+  // out of the way of native cursor movement in text.
+  React.useEffect(() => {
+    if (!record) return;
+    const onKey = (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const t = e.target;
+      const tag = t && t.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (t && t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'ArrowLeft' && onPrev) { e.preventDefault(); onPrev(); }
+      if (e.key === 'ArrowRight' && onNext) { e.preventDefault(); onNext(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [record, onPrev, onNext]);
+
   if (!record) return null;
 
   const similar = findSimilarRecords(record, allRecords);
@@ -126,7 +144,21 @@ function RecordDetail({ record, onClose, onAddTrack, isTrackInSet, onAddAllTrack
           fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
           textTransform: 'uppercase', color: 'var(--dim)',
         }}>Record · {record.catalog}</div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {(onPrev || onNext) && (
+            <>
+              <NavArrowBtn onClick={onPrev} disabled={!onPrev}
+                title="Previous record (←)" direction="left" />
+              <NavArrowBtn onClick={onNext} disabled={!onNext}
+                title="Next record (→)" direction="right" />
+              {positionLabel && (
+                <span style={{
+                  fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+                  letterSpacing: 1, color: 'var(--dim)', padding: '0 6px',
+                }}>{positionLabel}</span>
+              )}
+            </>
+          )}
           {onEdit && (
             <button onClick={onEdit} title="Edit record" style={{
               padding: '5px 10px', borderRadius: 999, border: '1px solid var(--border)',
@@ -618,5 +650,33 @@ function albumKey(r) {
 }
 
 // (AudioUploadBtn was replaced by the per-track BPM refresh button — no users left.)
+
+// Compact circular arrow button used in the detail header for prev/next
+// record navigation. Disabled state stays in the layout but fades out so
+// the header geometry doesn't jump when you reach the ends of the list.
+function NavArrowBtn({ onClick, disabled, title, direction }) {
+  return (
+    <button onClick={onClick} disabled={disabled} title={title} style={{
+      width: 28, height: 28, borderRadius: 14,
+      border: '1px solid var(--border)',
+      background: 'transparent',
+      color: 'var(--fg)',
+      cursor: disabled ? 'default' : 'pointer',
+      opacity: disabled ? 0.3 : 1,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 0, fontFamily: 'inherit',
+      transition: 'background 0.15s, border-color 0.15s',
+    }}
+    onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.background = 'var(--hover)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        {direction === 'left'
+          ? <polyline points="15 18 9 12 15 6" />
+          : <polyline points="9 18 15 12 9 6" />}
+      </svg>
+    </button>
+  );
+}
 
 Object.assign(window, { RecordDetail });
