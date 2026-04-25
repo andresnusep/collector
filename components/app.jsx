@@ -139,7 +139,8 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       ? { ...c, recordIds: c.recordIds.filter(r => r !== recordId) } : c));
   };
   const [swipeIndex, setSwipeIndex] = React.useState(0);
-  const [mobileOpen, setMobileOpen] = React.useState(true);
+  // Phone companion panel on the desktop view was removed — the phone version
+  // is its own first-class view now (auto-swapped in by the isPhone branch).
   const [importOpen, setImportOpen] = React.useState(false);
   const [analyzeOpen, setAnalyzeOpen] = React.useState(false);
   const [formOpen, setFormOpen] = React.useState(false);
@@ -543,14 +544,13 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   return (
     <div className={`app ${tweaks.theme}`} style={{
       display: 'grid',
-      gridTemplateColumns: mobileOpen ? '220px 1fr 420px' : '220px 1fr',
+      gridTemplateColumns: '220px 1fr',
       height: '100vh', overflow: 'hidden',
       background: 'var(--bg)', color: 'var(--fg)',
       transition: 'grid-template-columns 0.3s cubic-bezier(0.2, 0, 0.2, 1)',
     }}>
       {/* Sidebar */}
       <Sidebar view={view} setView={setView} set={set} records={records}
-        mobileOpen={mobileOpen} setMobileOpen={setMobileOpen}
         onOpenImport={() => setImportOpen(true)}
         onAddRecord={openNewRecord}
         onAnalyze={() => setAnalyzeOpen(true)}
@@ -668,58 +668,6 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
         )}
       </div>
 
-      {/* Mobile companion */}
-      {mobileOpen && (
-        <div style={{
-          background: 'var(--sidebar-bg)', borderLeft: '1px solid var(--border)',
-          padding: '20px 20px 28px', overflow: 'hidden',
-          display: 'flex', flexDirection: 'column', alignItems: 'center',
-        }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            width: '100%', marginBottom: 14,
-          }}>
-            <div style={{
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
-              textTransform: 'uppercase', color: 'var(--dim)',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />
-              Gig companion · Live
-            </div>
-            <button onClick={() => setMobileOpen(false)} style={{
-              width: 22, height: 22, borderRadius: 11, border: '1px solid var(--border)',
-              background: 'transparent', color: 'var(--dim)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-            }}>{Icon.X}</button>
-          </div>
-          <IOSDevice width={340} height={720} dark={tweaks.theme === 'dark'}>
-            <MobileApp records={records} set={set} crates={crates} savedSets={savedSets}
-              currentSetName={currentSetName} setCurrentSetName={setCurrentSetName}
-              onSaveSet={saveCurrentSet}
-              onToggleTrack={toggleTrack}
-              onRemoveFromSet={removeFromSet}
-              onReorderSet={reorder}
-              onClearSet={() => setSet([])}
-              onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
-              profile={profile} setProfile={setProfile}
-              darkMode={tweaks.theme === 'dark'} accent={ACCENTS[tweaks.accent] || tweaks.accent} />
-          </IOSDevice>
-        </div>
-      )}
-
-      {!mobileOpen && (
-        <button onClick={() => setMobileOpen(true)} style={{
-          position: 'absolute', right: 20, bottom: 20,
-          padding: '10px 16px', borderRadius: 999,
-          background: 'var(--accent)', color: 'var(--on-accent)',
-          border: 'none', fontSize: 11, fontWeight: 700, letterSpacing: 1,
-          textTransform: 'uppercase', fontFamily: 'inherit', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 6, zIndex: 30,
-          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-        }}>{Icon.Mobile} Phone preview</button>
-      )}
-
       <DiscogsImportModal open={importOpen}
         existingRecords={records}
         onClose={() => setImportOpen(false)}
@@ -746,7 +694,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   );
 }
 
-function Sidebar({ view, setView, set, records, mobileOpen, setMobileOpen, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile, user, onSignOut }) {
+function Sidebar({ view, setView, set, records, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile, user, onSignOut }) {
   const stats = {
     total: records.length,
     genres: new Set(records.map(r => r.genre)).size,
