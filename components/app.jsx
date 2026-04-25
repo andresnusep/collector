@@ -311,10 +311,38 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       const mergedSets     = mergeById(savedSets, cloudSets);
       const mergedCrates   = mergeById(crates,    cloudCrates);
 
+      // One-time cleanup of pre-launch demo records. The fictional collection
+      // in data/records.js (Ondalina, Kofi Mensah Quintet, …) used IDs r01–r12;
+      // some early accounts have these stored in their cloud tables and they
+      // re-merge on every hydration. Real Discogs imports use d{number} IDs
+      // and manual records use longer/UUID-shaped ones, so the regex is safe.
+      const SEED_ID = /^r\d{2}$/;
+      const seedRecords = mergedRecords.filter(r => SEED_ID.test(r.id));
+      let cleanedRecords = mergedRecords;
+      let cleanedSets = mergedSets;
+      let cleanedCrates = mergedCrates;
+      let cleanedSet = set;
+      if (seedRecords.length) {
+        const seedIds = new Set(seedRecords.map(r => r.id));
+        const isSeedTrackId = (tid) => seedIds.has(String(tid).split('-')[0]);
+        cleanedRecords = mergedRecords.filter(r => !seedIds.has(r.id));
+        cleanedSets = mergedSets.map(s => ({
+          ...s, trackIds: (s.trackIds || []).filter(tid => !isSeedTrackId(tid)),
+        }));
+        cleanedCrates = mergedCrates.map(c => ({
+          ...c, recordIds: (c.recordIds || []).filter(rid => !seedIds.has(rid)),
+        }));
+        cleanedSet = (set || []).filter(tid => !isSeedTrackId(tid));
+        // Tear them out of the cloud too. Saved sets/crates that lost
+        // entries will be re-upserted by the diff effect once state settles.
+        await Promise.all(seedRecords.map(r => window.Sync.deleteRecord(r.id)));
+      }
+
       setProfile(window.migrateProfile(cloudProfile || profile));
-      setRecords(mergedRecords);
-      setSavedSets(mergedSets);
-      setCrates(mergedCrates);
+      setRecords(cleanedRecords);
+      setSavedSets(cleanedSets);
+      setCrates(cleanedCrates);
+      if (seedRecords.length) setSet(cleanedSet);
       if (cloudWorkspace) {
         if (Array.isArray(cloudWorkspace.set)) setSet(cloudWorkspace.set);
         if (typeof cloudWorkspace.currentSetName === 'string') setCurrentSetName(cloudWorkspace.currentSetName);
@@ -331,9 +359,11 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       ].filter(Boolean));
 
       // Prime refs so write-through doesn't re-upsert what we just merged.
-      prevRecordsRef.current = mergedRecords;
-      prevSetsRef.current    = mergedSets;
-      prevCratesRef.current  = mergedCrates;
+      // Use the cleaned versions so the diff effect doesn't double-fire the
+      // seed-record deletes we already issued above.
+      prevRecordsRef.current = cleanedRecords;
+      prevSetsRef.current    = mergedSets;   // still merged: cleanedSets has new
+      prevCratesRef.current  = mergedCrates; // object refs that should upsert
       setHydrated(true);
     })();
     return () => { cancelled = true; };
