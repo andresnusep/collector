@@ -308,27 +308,26 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
   React.useEffect(() => { stop(); }, [current && current.tid, stop]);
   React.useEffect(() => () => stop(), [stop]);
 
-  if (!current) return null;
-  const r = current.record, t = current.track;
-
   // ── Mix suggestions: pick the best next tracks FROM THIS SET only ──
   // Primary weight: BPM closeness (user preference). Tiebreaker: Camelot key.
+  // Kept above the `if (!current) return null` guard so hook order stays stable
+  // across renders (Rules of Hooks) — the memo body tolerates a null current.
+  const curBpm = current && current.track ? current.track.bpm : null;
+  const curKey = current && current.track ? current.track.key : null;
   const suggestions = React.useMemo(() => {
-    if (!queue || queue.length < 2 || t.bpm == null) return [];
-    const currentBpm = t.bpm;
-    const currentKey = t.key;
+    if (!current || !queue || queue.length < 2 || curBpm == null) return [];
     const pool = queue
       .map((q, i) => ({ ...q, qIdx: i }))
       .filter((q, i) => i !== position && q.track.bpm != null);
     const scored = pool.map(q => {
-      const bpmDiff = Math.abs(q.track.bpm - currentBpm);
-      const keyPenalty = window.camelotDistance(currentKey, q.track.key);
+      const bpmDiff = Math.abs(q.track.bpm - curBpm);
+      const keyPenalty = window.camelotDistance(curKey, q.track.key);
       // BPM-first: score = bpmDiff * 2 + keyPenalty (key still matters but doesn't dominate)
       return { ...q, bpmDiff, keyPenalty, score: bpmDiff * 2 + keyPenalty };
     });
     scored.sort((a, b) => a.score - b.score);
     return scored.slice(0, 3);
-  }, [queue, position, t.bpm, t.key]);
+  }, [current, queue, position, curBpm, curKey]);
 
   // Next 3 tracks in queue order (wraps around).
   const upNext = React.useMemo(() => {
@@ -340,6 +339,9 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
     }
     return out;
   }, [queue, position]);
+
+  if (!current) return null;
+  const r = current.record, t = current.track;
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column',
