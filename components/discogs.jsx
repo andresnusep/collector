@@ -11,11 +11,11 @@ function DiscogsImportModal({ open, onClose, onImport, existingRecords }) {
   const [error, setError] = React.useState('');
   const [done, setDone] = React.useState(null); // { count, skipped }
 
-  if (!open) return null;
-
   // Discogs IDs of records already in the collection — passed to
   // fetchDiscogsCollection so it can skip the slow per-release tracklist fetch
-  // for anything the user already has.
+  // for anything the user already has. Must stay above the `!open` early
+  // return so React's Rules of Hooks are satisfied (same hook order on
+  // every render, regardless of `open`).
   const existingIds = React.useMemo(() => {
     const s = new Set();
     for (const r of existingRecords || []) {
@@ -23,6 +23,8 @@ function DiscogsImportModal({ open, onClose, onImport, existingRecords }) {
     }
     return s;
   }, [existingRecords]);
+
+  if (!open) return null;
 
   const startImport = async () => {
     setError(''); setDone(null);
