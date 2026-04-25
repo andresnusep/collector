@@ -1,7 +1,8 @@
 // Mobile companion — gig-ready quick reference
 
-function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrentSetName,
+function MobileApp({ records, set, crates, savedSets, gigs, currentSetName, setCurrentSetName,
                      onSaveSet, onToggleTrack, onRemoveFromSet, onReorderSet, onClearSet, onLoadSavedSet,
+                     onAddGig, onUpdateGig, onDeleteGig,
                      profile, setProfile, user, onSignOut,
                      darkMode, accent }) {
   const [tab, setTab] = React.useState('now');
@@ -151,6 +152,11 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
           accent={accent} fg={fg} soft={soft} border={border}
           setTrackIds={new Set(set)} onToggleTrack={onToggleTrack} />
       )}
+      {tab === 'calendar' && (
+        <MobileCalendar gigs={gigs || []} savedSets={savedSets || []}
+          onAddGig={onAddGig} onUpdateGig={onUpdateGig} onDeleteGig={onDeleteGig}
+          accent={accent} fg={fg} soft={soft} border={border} />
+      )}
 
       {/* Tab bar */}
       <div style={{
@@ -160,6 +166,7 @@ function MobileApp({ records, set, crates, savedSets, currentSetName, setCurrent
       }}>
         {[
           { id: 'now', label: 'Gig', icon: Icon.Disc },
+          { id: 'calendar', label: 'Cal', icon: Icon.Calendar },
           { id: 'lib', label: 'Library', icon: Icon.Dig },
           { id: 'crates', label: 'Crates', icon: Icon.Heart },
           { id: 'set', label: 'Sets', icon: Icon.Deck },
@@ -1204,6 +1211,163 @@ function MobileRecordGrid({ records, accent, fg, border, setTrackIds, onToggleTr
       })}
     </div>
   );
+}
+
+// ─────────── Calendar (mobile gig list) ───────────
+
+function MobileCalendar({ gigs, savedSets, onAddGig, onUpdateGig, onDeleteGig,
+                         accent, fg, soft, border }) {
+  const [editing, setEditing] = React.useState(null);
+  const today = new Date().toISOString().slice(0, 10);
+  const inferStatus = (g) => g.status
+    || (g.playedAt && g.playedAt < today ? 'played' : 'upcoming');
+
+  const upcoming = gigs.filter(g => inferStatus(g) === 'upcoming')
+    .sort((a, b) => (a.playedAt || '￿').localeCompare(b.playedAt || '￿'));
+  const past = gigs.filter(g => inferStatus(g) === 'played')
+    .sort((a, b) => (b.playedAt || '').localeCompare(a.playedAt || ''));
+
+  const startNew = () => setEditing({
+    id: `g${Date.now()}`,
+    playedAt: '', venue: '', location: '',
+    setId: '', notes: '', status: 'upcoming', is_public: false,
+  });
+
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '0 18px 20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6 }}>Calendar</div>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1,
+            textTransform: 'uppercase', opacity: 0.55,
+          }}>{upcoming.length} upcoming · {past.length} past</div>
+        </div>
+        <button onClick={startNew} style={{
+          width: 36, height: 36, borderRadius: 18, border: 'none',
+          background: accent, color: '#0E0C0A',
+          fontSize: 20, fontWeight: 700, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 0, lineHeight: 1,
+        }}>+</button>
+      </div>
+
+      {gigs.length === 0 ? (
+        <div style={{
+          padding: 28, textAlign: 'center', borderRadius: 12,
+          border: `1px dashed ${border}`, opacity: 0.7,
+        }}>
+          <div style={{ fontSize: 13, marginBottom: 6 }}>No gigs yet.</div>
+          <div style={{ fontSize: 11, lineHeight: 1.5, opacity: 0.8 }}>
+            Tap + to add an upcoming booking or log a past set.
+          </div>
+        </div>
+      ) : (
+        <>
+          {upcoming.length > 0 && (
+            <MobileCalendarSection title="Upcoming" gigs={upcoming}
+              savedSets={savedSets}
+              onEdit={(g) => setEditing(g)}
+              onDelete={(g) => { if (confirm(`Delete "${g.venue || 'this gig'}"?`)) onDeleteGig(g.id); }}
+              accent={accent} fg={fg} soft={soft} border={border} />
+          )}
+          {past.length > 0 && (
+            <MobileCalendarSection title="Past" gigs={past}
+              savedSets={savedSets}
+              onEdit={(g) => setEditing(g)}
+              onDelete={(g) => { if (confirm(`Delete "${g.venue || 'this gig'}"?`)) onDeleteGig(g.id); }}
+              accent={accent} fg={fg} soft={soft} border={border} />
+          )}
+        </>
+      )}
+
+      {editing && window.GigForm && (
+        <window.GigForm gig={editing} savedSets={savedSets}
+          onClose={() => setEditing(null)}
+          onSave={(g) => {
+            const exists = gigs.some(x => x.id === g.id);
+            if (exists) onUpdateGig(g); else onAddGig(g);
+            setEditing(null);
+          }} />
+      )}
+    </div>
+  );
+}
+
+function MobileCalendarSection({ title, gigs, savedSets, onEdit, onDelete,
+                                  accent, fg, soft, border }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.2,
+        textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
+      }}>{title} · {gigs.length}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {gigs.map(g => (
+          <MobileGigRow key={g.id} gig={g} savedSets={savedSets}
+            onEdit={() => onEdit(g)} onDelete={() => onDelete(g)}
+            accent={accent} fg={fg} soft={soft} border={border} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MobileGigRow({ gig, savedSets, onEdit, onDelete, accent, fg, soft, border }) {
+  const linkedSet = gig.setId ? savedSets.find(s => s.id === gig.setId) : null;
+  const dateLabel = gig.playedAt ? formatMobileGigDate(gig.playedAt) : '—';
+  return (
+    <button onClick={onEdit} style={{
+      width: '100%', display: 'flex', gap: 10, padding: 12,
+      borderRadius: 10, background: soft, border: `1px solid ${border}`,
+      color: fg, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+    }}>
+      <div style={{
+        width: 54, flexShrink: 0,
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+        color: accent, fontWeight: 700, letterSpacing: 0.5,
+        textTransform: 'uppercase', lineHeight: 1.3,
+      }}>{dateLabel}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 13, fontWeight: 700,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: '100%' }}>{gig.venue || 'Untitled venue'}</div>
+          {gig.is_public && (
+            <span style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 8, fontWeight: 700,
+              padding: '1px 5px', borderRadius: 3, letterSpacing: 0.8,
+              background: accent, color: '#0E0C0A', textTransform: 'uppercase',
+            }}>Public</span>
+          )}
+        </div>
+        {gig.location && (
+          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 1 }}>{gig.location}</div>
+        )}
+        {linkedSet && (
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, opacity: 0.55,
+            marginTop: 2,
+          }}>Set: {linkedSet.name}</div>
+        )}
+      </div>
+      <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        title="Delete" style={{
+          width: 26, height: 26, borderRadius: 13, padding: 0,
+          background: 'transparent', border: `1px solid ${border}`,
+          color: fg, cursor: 'pointer', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, lineHeight: 1,
+        }}>×</button>
+    </button>
+  );
+}
+
+function formatMobileGigDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 // ─────────── Small reusable filter/sort helpers ───────────

@@ -9,7 +9,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     mql.addEventListener('change', handler);
     return () => mql.removeEventListener('change', handler);
   }, []);
-  const [view, setView] = React.useState('collection'); // collection | set | sets | dashboard
+  const [view, setView] = React.useState('collection'); // collection | set | sets | dashboard | calendar | profile
   const [viewingSetId, setViewingSetId] = React.useState(null);
   const [gigMode, setGigMode] = React.useState(false);
   const [gigResolved, setGigResolved] = React.useState(null); // optional override; null = use current set
@@ -128,6 +128,13 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   const updateSavedSetGigs = (id, gigs) => {
     setSavedSets(ss => ss.map(s => s.id === id ? { ...s, gigs } : s));
   };
+
+  // Gig CRUD — operate on the new top-level gigs state. Phase 1's migration
+  // already lifted nested saved_sets.gigs[] into here; from now on this is
+  // the source of truth for the calendar.
+  const addGig = (gig) => setGigs(gs => [...gs, gig]);
+  const updateGig = (gig) => setGigs(gs => gs.map(g => g.id === gig.id ? gig : g));
+  const deleteGig = (id) => setGigs(gs => gs.filter(g => g.id !== id));
 
   const newCrate = (name, firstRecordId) => {
     const id = `c${Date.now()}`;
@@ -677,6 +684,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
         background: 'var(--bg)', color: 'var(--fg)',
       }}>
         <MobileApp records={records} set={set} crates={crates} savedSets={savedSets}
+          gigs={gigs}
           currentSetName={currentSetName} setCurrentSetName={setCurrentSetName}
           onSaveSet={saveCurrentSet}
           onToggleTrack={toggleTrack}
@@ -684,6 +692,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           onReorderSet={reorder}
           onClearSet={() => setSet([])}
           onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
+          onAddGig={addGig} onUpdateGig={updateGig} onDeleteGig={deleteGig}
           profile={profile} setProfile={setProfile}
           user={user} onSignOut={onSignOut}
           darkMode={tweaks.theme === 'dark'} accent={ACCENTS[tweaks.accent] || tweaks.accent} />
@@ -700,7 +709,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       transition: 'grid-template-columns 0.3s cubic-bezier(0.2, 0, 0.2, 1)',
     }}>
       {/* Sidebar */}
-      <Sidebar view={view} setView={setView} set={set} records={records}
+      <Sidebar view={view} setView={setView} set={set} records={records} gigs={gigs}
         onOpenImport={() => setImportOpen(true)}
         onAddRecord={openNewRecord}
         onAnalyze={() => setAnalyzeOpen(true)}
@@ -759,6 +768,10 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           )}
           {view === 'dashboard' && (
             <Dashboard records={records} set={set} />
+          )}
+          {view === 'calendar' && (
+            <CalendarView gigs={gigs} savedSets={savedSets}
+              onAddGig={addGig} onUpdateGig={updateGig} onDeleteGig={deleteGig} />
           )}
           {view === 'profile' && (
             <ProfilePage profile={profile} setProfile={setProfile}
@@ -858,7 +871,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   );
 }
 
-function Sidebar({ view, setView, set, records, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile, user, onSignOut }) {
+function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord, onAnalyze, crates, activeCrateId, setActiveCrateId, onNewCrate, onDeleteCrate, savedSets, activeSetId, viewingSetId, onSaveSet, onOpenSet, onDeleteSet, profile, user, onSignOut }) {
   const stats = {
     total: records.length,
     genres: new Set(records.map(r => r.genre)).size,
@@ -925,6 +938,9 @@ function Sidebar({ view, setView, set, records, onOpenImport, onAddRecord, onAna
         <NavItem icon={Icon.Deck} label="Set Builder"
           active={view === 'set'} onClick={() => setView('set')}
           badge={set.length > 0 ? set.length : null} accent={set.length > 0} />
+        <NavItem icon={Icon.Calendar} label="Calendar"
+          active={view === 'calendar'} onClick={() => setView('calendar')}
+          badge={gigs.length > 0 ? gigs.length : null} />
         <NavItem icon={Icon.Grid} label="Dashboard"
           active={view === 'dashboard'} onClick={() => setView('dashboard')} />
       </nav>
@@ -1151,6 +1167,7 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
             view === 'crates' ? 'Curated groups' :
             view === 'set' ? 'Build a set' :
             view === 'sets' ? 'Saved sets' :
+            view === 'calendar' ? 'Gigs & events' :
             view === 'dashboard' ? 'Collection health' : ''
           }</div>
           <h1 style={{
@@ -1162,6 +1179,7 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
               : <>Crates<span style={{ color: 'var(--accent)' }}>.</span></>)}
             {view === 'set' && <>Set builder<span style={{ color: 'var(--accent)' }}>.</span></>}
             {view === 'sets' && <>Your sets<span style={{ color: 'var(--accent)' }}>.</span></>}
+            {view === 'calendar' && <>Calendar<span style={{ color: 'var(--accent)' }}>.</span></>}
             {view === 'dashboard' && <>Dashboard<span style={{ color: 'var(--accent)' }}>.</span></>}
           </h1>
         </div>
@@ -1173,6 +1191,7 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
           {view === 'crates' && <>Organize records into named groups</>}
           {view === 'set' && <>Swipe right to add · swipe left to skip</>}
           {view === 'sets' && <>Pick a set from the sidebar</>}
+          {view === 'calendar' && <>Upcoming gigs and past sets</>}
           {view === 'dashboard' && <>Everything at a glance</>}
         </div>
       </div>
