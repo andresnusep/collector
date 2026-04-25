@@ -67,9 +67,11 @@ function SignInScreen({ tweaks }) {
     }}>
       <div style={{ width: '100%', maxWidth: 360 }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: -1.2, lineHeight: 1 }}>
-            Kollector<br /><span style={{ color: 'var(--accent)' }}>Studio.</span>
-          </div>
+          {/* Full wordmark logo. The PNG has its own internal padding, so no
+              extra margin needed. Capped width keeps it readable on phones. */}
+          <img src="kollectorlogo.png" alt="Kollector Studio"
+            style={{ maxWidth: 220, width: '60%', height: 'auto', display: 'block',
+              margin: '0 auto' }} />
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
             textTransform: 'uppercase', color: 'var(--dim)', marginTop: 10,

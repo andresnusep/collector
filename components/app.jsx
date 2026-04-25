@@ -707,17 +707,23 @@ function Sidebar({ view, setView, set, records, onOpenImport, onAddRecord, onAna
       padding: '20px 16px', display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
     }}>
-      {/* Wordmark */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={{
-          fontSize: 22, fontWeight: 800, letterSpacing: -0.8, lineHeight: 0.95,
-        }}>
-          Kollector<br /><span style={{ color: 'var(--accent)' }}>Studio</span><span style={{ color: 'var(--accent)' }}>.</span>
+      {/* Wordmark — favicon mark sits to the left of the styled type so the
+          brand reads visually even when the dark mark would clash on a dark bg. */}
+      <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <img src="kollectorfav.png" alt=""
+          style={{ width: 38, height: 38, borderRadius: 6, flexShrink: 0,
+            background: 'var(--fg)', padding: 4 }} />
+        <div style={{ minWidth: 0 }}>
+          <div style={{
+            fontSize: 22, fontWeight: 800, letterSpacing: -0.8, lineHeight: 0.95,
+          }}>
+            Kollector<br /><span style={{ color: 'var(--accent)' }}>Studio</span><span style={{ color: 'var(--accent)' }}>.</span>
+          </div>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase', color: 'var(--dim)', marginTop: 6,
+          }}>For vinyl DJs · v1.0 BETA</div>
         </div>
-        <div style={{
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
-          textTransform: 'uppercase', color: 'var(--dim)', marginTop: 6,
-        }}>For vinyl DJs · v1.0 BETA</div>
       </div>
 
       {/* Profile chip — click to open profile page (includes sign out) */}
