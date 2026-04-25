@@ -101,6 +101,9 @@ async function musicBrainzSearch(artist, title) {
     score: r.score || 0,
     title: r.title,
     artist: ((r["artist-credit"] || [])[0] || {}).name,
+    // MusicBrainz returns recording length in ms. Used as a duration fallback
+    // when the AcousticBrainz payload for this MBID lacks audio_properties.
+    lengthMs: typeof r.length === "number" && r.length > 0 ? r.length : null,
   }));
 }
 
@@ -119,7 +122,12 @@ async function acousticBrainzLookup(mbid) {
   const keyRoot = data.tonal && data.tonal.key_key;
   const keyScale = data.tonal && data.tonal.key_scale;
   const key = toCamelot(keyRoot, keyScale);
-  return { bpm: bpm, key: key };
+  // AcousticBrainz stores length in seconds (float) under audio_properties.
+  const lenSec = data.metadata && data.metadata.audio_properties &&
+    data.metadata.audio_properties.length;
+  const lengthMs = typeof lenSec === "number" && lenSec > 0
+    ? Math.round(lenSec * 1000) : null;
+  return { bpm: bpm, key: key, lengthMs: lengthMs };
 }
 
 // GetSongBPM fallback. Returns { result, debug } — debug carries diagnostics
@@ -175,7 +183,30 @@ async function getSongBpmLookup(artist, title) {
   const bpmRaw = Number(hit.tempo);
   const bpm = Number.isFinite(bpmRaw) && bpmRaw > 0 ? Math.round(bpmRaw) : null;
   const key = noteToCamelot(hit.key_of);
-  return { result: { bpm: bpm, key: key }, debug: { gs: "ok" } };
+  // GetSongBPM returns `duration` as either a "m:ss" string or a number of
+  // seconds depending on the endpoint. Handle both defensively.
+  const lengthMs = parseGsDuration(hit.duration);
+  return { result: { bpm: bpm, key: key, lengthMs: lengthMs }, debug: { gs: "ok" } };
+}
+
+// Parse GetSongBPM's loosely-typed duration field into ms.
+function parseGsDuration(raw) {
+  if (raw == null) return null;
+  if (typeof raw === "number") {
+    return raw > 0 ? Math.round(raw * 1000) : null;
+  }
+  const s = String(raw).trim();
+  if (!s) return null;
+  // "3:45" / "3:45.2" / "1:02:33"
+  const parts = s.split(":").map((p) => Number(p));
+  if (parts.every((n) => Number.isFinite(n))) {
+    let sec = 0;
+    for (const n of parts) sec = sec * 60 + n;
+    return sec > 0 ? Math.round(sec * 1000) : null;
+  }
+  // Plain number-as-string ("223")
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 1000) : null;
 }
 
 // Parse "C", "Am", "F#m", "Bb" -> Camelot. Also passes through existing Camelot ("5A").
@@ -209,6 +240,8 @@ Deno.serve(async (req) => {
     const candidates = await musicBrainzSearch(artist, title);
 
     // Step 2: walk candidates until one has AcousticBrainz data with at least BPM.
+    // Even when AB misses, we still carry the MusicBrainz-reported length through
+    // so callers can backfill duration from MB alone.
     if (candidates.length) {
       for (let i = 0; i < Math.min(candidates.length, 5); i++) {
         const c = candidates[i];
@@ -217,6 +250,9 @@ Deno.serve(async (req) => {
           return jsonResponse({
             bpm: ab.bpm,
             key: ab.key,
+            // Prefer AB length (matches the specific recording); fall back to
+            // the MusicBrainz-reported length for the same MBID.
+            lengthMs: ab.lengthMs != null ? ab.lengthMs : c.lengthMs,
             matched: true,
             source: "acousticbrainz",
             mbid: c.id,
@@ -234,19 +270,25 @@ Deno.serve(async (req) => {
       return jsonResponse({
         bpm: gs.result.bpm,
         key: gs.result.key,
+        // GS duration first, MB duration next (in case GS has no duration but
+        // we did match an MBID earlier in step 1).
+        lengthMs: gs.result.lengthMs != null
+          ? gs.result.lengthMs
+          : (candidates.length ? candidates[0].lengthMs : null),
         matched: true,
         source: "getsongbpm",
       });
     }
 
-    // Nothing worked. Debug-only: set DEBUG_BPM_LOOKUP=1 to echo the GetSongBPM
-    // failure reason back in the response. Off by default so we don't leak keys
-    // or odd upstream snippets to clients.
+    // Nothing worked for BPM/key — but we might still have a duration from
+    // MusicBrainz alone (common when AB has no data for the recording).
+    // Debug-only: set DEBUG_BPM_LOOKUP=1 to echo the GetSongBPM failure reason.
     const source = candidates.length ? "all:no-features" : "all:miss";
     const debugOn = Deno.env.get("DEBUG_BPM_LOOKUP") === "1";
     return jsonResponse({
       bpm: null,
       key: null,
+      lengthMs: candidates.length ? candidates[0].lengthMs : null,
       matched: candidates.length > 0,
       source: source,
       mbid: candidates.length ? candidates[0].id : undefined,

@@ -194,9 +194,15 @@ async function lookupGetSongBpm(artist, title) {
       : {});
     if (!res.ok) return null;
     const data = await res.json();
+    const lengthMs = Number.isFinite(data.lengthMs) && data.lengthMs > 0
+      ? data.lengthMs : null;
     return {
       bpm: Number.isFinite(data.bpm) && data.bpm > 0 ? Math.round(data.bpm) : null,
       key: data.key || null,
+      // Pre-formatted "m:ss" for convenient backfill of track.len; null when
+      // no source returned a usable duration.
+      len: lengthMs != null && window.formatLenMs ? window.formatLenMs(lengthMs) : null,
+      lengthMs: lengthMs,
     };
   } catch { return null; }
 }

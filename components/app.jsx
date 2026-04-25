@@ -164,6 +164,11 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     // If we just edited the record currently open in the detail drawer, refresh it
     if (selected && selected.id === rec.id) setSelected(rec);
   };
+  // Treat a track's `len` as "empty" if it's falsy or the "0:00" placeholder
+  // that Discogs leaves when it has no duration data. Used by every place
+  // that backfills duration so we don't clobber a Discogs-sourced real value.
+  const isEmptyLen = (s) => !s || s === '0:00' || s === '0:0';
+
   const applyAnalysis = (updates) => {
     setRecords(cur => cur.map(r => {
       const ups = updates[r.id];
@@ -171,7 +176,13 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
       const tracks = r.tracks.map((t, i) => {
         const u = ups.find(x => x.trackIndex === i);
         if (!u) return t;
-        return { ...t, bpm: u.bpm ?? t.bpm, key: u.key ?? t.key };
+        return {
+          ...t,
+          bpm: u.bpm ?? t.bpm,
+          key: u.key ?? t.key,
+          // Only backfill len when we have a fresh value AND the existing slot is empty.
+          len: (u.len && isEmptyLen(t.len)) ? u.len : t.len,
+        };
       });
       const bpms = tracks.map(t => t.bpm).filter(b => b != null);
       const avgBpm = bpms.length ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) : r.bpm;
@@ -181,15 +192,20 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
   };
 
   // Per-track BPM/key refresh. Looks up the single track via the edge function
-  // and applies the result through the same pipeline as bulk analysis.
+  // and applies the result through the same pipeline as bulk analysis. Also
+  // backfills duration when the lookup returns a lengthMs (MB/AB/GSBPM all
+  // provide it when available).
   const refreshTrackBpm = async (recordId, trackIndex) => {
     const rec = records.find(r => r.id === recordId);
     if (!rec) return null;
     const t = rec.tracks[trackIndex];
     if (!t) return null;
     const result = await window.lookupGetSongBpm(rec.artist, t.title || rec.title);
-    if (!result || (result.bpm == null && !result.key)) return null;
-    applyAnalysis({ [recordId]: [{ trackIndex, bpm: result.bpm, key: result.key }] });
+    if (!result) return null;
+    const hasAny = result.bpm != null || result.key || result.len;
+    if (!hasAny) return null;
+    applyAnalysis({ [recordId]: [{ trackIndex,
+      bpm: result.bpm, key: result.key, len: result.len }] });
     return result;
   };
 
@@ -417,7 +433,14 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
         const tracks = rec.tracks.map((t, i) => {
           const u = ups.find(x => x.trackIndex === i);
           if (!u) return t;
-          return { ...t, bpm: u.bpm ?? t.bpm, key: u.key ?? t.key, bpmTried: true };
+          return {
+            ...t,
+            bpm: u.bpm ?? t.bpm,
+            key: u.key ?? t.key,
+            // Same backfill rule as applyAnalysis — don't clobber a real len.
+            len: (u.len && isEmptyLen(t.len)) ? u.len : t.len,
+            bpmTried: true,
+          };
         });
         const bpms = tracks.map(t => t.bpm).filter(b => b != null);
         const avgBpm = bpms.length ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) : rec.bpm;
@@ -428,6 +451,37 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     })();
     return () => { cancelled = true; autoAnalyzeRunning.current = false; };
   }, [records, hydrated]);
+
+  // Preview-sourced duration backfill. iTunes previews fire a cs-track-duration
+  // event with { trackId: "r12-3", durationMs } whenever a fresh match lands.
+  // We translate that into a len update, matching applyAnalysis's rule: only
+  // fill when the current slot is empty (so user-entered durations win).
+  React.useEffect(() => {
+    if (!hydrated) return;
+    const onDuration = (e) => {
+      const detail = e.detail || {};
+      const trackId = detail.trackId;
+      const durationMs = detail.durationMs;
+      if (!trackId || !Number.isFinite(durationMs) || durationMs <= 0) return;
+      const parts = String(trackId).split('-');
+      const trackIndex = Number(parts.pop());
+      const recordId = parts.join('-');
+      if (!recordId || !Number.isFinite(trackIndex)) return;
+      const len = window.formatLenMs ? window.formatLenMs(durationMs) : null;
+      if (!len) return;
+      setRecords(cur => cur.map(r => {
+        if (r.id !== recordId) return r;
+        const t = r.tracks[trackIndex];
+        if (!t || !isEmptyLen(t.len)) return r; // don't clobber a real value
+        const tracks = r.tracks.map((tr, i) =>
+          i === trackIndex ? { ...tr, len } : tr);
+        return { ...r, tracks };
+      }));
+    };
+    window.addEventListener('cs-track-duration', onDuration);
+    return () => window.removeEventListener('cs-track-duration', onDuration);
+  }, [hydrated]);
+
   const isTrackInSet = (tid) => set.includes(tid);
   // Record has "some" track in set
   const recordInSet = (rid) => {

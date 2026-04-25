@@ -150,4 +150,14 @@ function camelotDistance(a, b) {
   return pa.ab === pb.ab ? d : d + 1;
 }
 
-Object.assign(window, { Tag, KeyBadge, BpmBadge, EnergyDots, Waveform, IconButton, Icon, camelotDistance });
+// Milliseconds → "m:ss". Returns null for non-positive / non-finite input so
+// callers can detect "no duration available" rather than showing "0:00".
+function formatLenMs(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return null;
+  const totalSec = Math.round(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+Object.assign(window, { Tag, KeyBadge, BpmBadge, EnergyDots, Waveform, IconButton, Icon, camelotDistance, formatLenMs });
