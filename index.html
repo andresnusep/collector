@@ -96,44 +96,53 @@
     filter: invert(1) hue-rotate(180deg);
   }
 
-  /* Profile header layout. Inline JSX styles set the desktop sizing; these
-     overrides kick in on phone widths (<540px) where four counters next to
-     a 120px avatar push the last counter off-screen. The avatar selector
-     reaches inside ProfileAvatar's inline-styled wrapper, so we use
-     !important to defeat the inline width/height. */
+  /* Public profile layout. Inline JSX styles set the desktop look (press-kit
+     hero with side-by-side bio + portrait, 4-up stat strip, big display
+     headline). These overrides reflow at narrower widths. */
+
+  /* Tablet — collapse the 2-column hero to stacked but keep stats 4-up. */
+  @media (max-width: 760px) {
+    .cs-profile-hero {
+      grid-template-columns: 1fr !important;
+    }
+    .cs-profile-portrait {
+      min-height: 200px !important;
+    }
+    .cs-profile-display {
+      font-size: 52px !important;
+      letter-spacing: -1.8px !important;
+    }
+  }
+
+  /* Phone — 2x2 stat grid, smaller headline, tighter padding. */
   @media (max-width: 540px) {
-    .cs-profile-header {
-      gap: 14px !important;
-      padding: 16px 16px 20px !important;
+    .cs-profile-bar {
       flex-direction: column !important;
-      align-items: center !important;
-      text-align: center !important;
-    }
-    .cs-profile-header .cs-profile-avatar,
-    .cs-profile-header .cs-profile-avatar > * {
-      width: 88px !important;
-      height: 88px !important;
-    }
-    .cs-profile-header .cs-profile-meta {
-      width: 100% !important;
-    }
-    .cs-profile-name-row {
-      justify-content: center !important;
-    }
-    .cs-profile-counters {
-      gap: 16px !important;
-      flex-wrap: wrap !important;
-      justify-content: center !important;
-    }
-    .cs-profile-counters > button {
-      flex: 0 0 auto;
-      min-width: 64px;
-    }
-    .cs-profile-counters .cs-counter-value {
-      font-size: 16px !important;
+      align-items: flex-start !important;
+      gap: 10px !important;
     }
     .cs-profile-actions {
-      justify-content: center !important;
+      width: 100% !important;
+    }
+    .cs-profile-display {
+      font-size: 42px !important;
+      letter-spacing: -1.4px !important;
+      line-height: 0.95 !important;
+    }
+    .cs-profile-stats {
+      grid-template-columns: 1fr 1fr !important;
+    }
+    .cs-stat-cell {
+      border-bottom: 1px solid var(--border);
+    }
+    .cs-stat-cell:nth-child(2n) {
+      border-right: none !important;
+    }
+    .cs-stat-cell:nth-last-child(-n+2) {
+      border-bottom: none;
+    }
+    .cs-counter-value {
+      font-size: 22px !important;
     }
   }
 

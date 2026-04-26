@@ -144,7 +144,7 @@ function ProfileScreen({ profile, sets = [], gigs = [], records = [],
   const visibleGigs = isOwner ? gigs : gigs.filter(g => g.is_public);
 
   return (
-    <div style={{ maxWidth: 780, margin: '0 auto', padding: '8px 0 60px' }}>
+    <div style={{ maxWidth: 920, margin: '0 auto', padding: '8px 0 60px' }}>
       <ProfileHeader profile={profile} isOwner={isOwner}
         setsCount={visibleSets.length}
         gigsCount={visibleGigs.length}
@@ -189,120 +189,201 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount,
   const displayName = profile.djName || profile.name || 'Unnamed DJ';
   const realName = profile.djName && profile.name && profile.djName !== profile.name
     ? profile.name : null;
+  const tagline = [profile.location, (profile.genres || []).slice(0, 3).join(' · ')]
+    .filter(Boolean).join(' · ');
+
   return (
-    <div className="cs-profile-header" style={{
-      display: 'flex', gap: 24, alignItems: 'flex-start',
-      padding: '20px 24px 24px', borderRadius: 14,
-      background: 'var(--hover)', border: '1px solid var(--border)',
-      marginBottom: 14,
-    }}>
-      <ProfileAvatar profile={profile} size={120}
-        className="cs-profile-avatar" />
-      <div className="cs-profile-meta" style={{ flex: 1, minWidth: 0 }}>
-        <div className="cs-profile-name-row" style={{ display: 'flex', flexWrap: 'wrap',
-          gap: 12, alignItems: 'center', marginBottom: 6 }}>
-          <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.6,
-            overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
-          {isOwner && profile.is_discoverable && (
-            <span style={{
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700,
-              padding: '3px 7px', borderRadius: 4, letterSpacing: 1,
-              background: 'var(--accent)', color: 'var(--on-accent)', textTransform: 'uppercase',
-            }}>Public</span>
-          )}
-          {isOwner && !profile.is_discoverable && (
-            <span style={{
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700,
-              padding: '3px 7px', borderRadius: 4, letterSpacing: 1,
-              border: '1px solid var(--border)', color: 'var(--dim)', textTransform: 'uppercase',
-            }}>Private</span>
-          )}
-        </div>
-        {realName && (
-          <div style={{ fontSize: 13, color: 'var(--dim)', marginBottom: 6 }}>{realName}</div>
-        )}
-        {profile.location && (
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: 1,
-            textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 10,
-          }}>{profile.location}</div>
-        )}
-
-        {/* Inline counters — IG-style. Followers/Following are clickable to
-            open the list modals; Sets/Gigs are static counts. flex-wrap so
-            narrow phone screens drop to a second row instead of overflowing. */}
-        <div className="cs-profile-counters" style={{ display: 'flex',
-          flexWrap: 'wrap', gap: 22, marginBottom: 12 }}>
-          <HeaderCounter value={setsCount} label="Sets" />
-          <HeaderCounter value={gigsCount} label="Gigs" />
-          <HeaderCounter value={followerCount} label="Followers"
-            onClick={onShowFollowers} />
-          <HeaderCounter value={followingCount} label="Following"
-            onClick={onShowFollowing} />
+    <div style={{ marginBottom: 18 }}>
+      {/* Press-kit-style status bar: living dot + actions on the right */}
+      <div className="cs-profile-bar" style={{
+        display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between',
+        padding: '11px 16px', borderRadius: 12, marginBottom: 12,
+        background: 'var(--hover)', border: '1px solid var(--border)',
+      }}>
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
+          textTransform: 'uppercase', color: 'var(--dim)',
+          display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+        }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+            background: profile.is_discoverable ? 'var(--accent)' : 'var(--border)',
+            animation: profile.is_discoverable ? 'gigPulse 1.5s infinite' : 'none',
+          }} />
+          <style>{`@keyframes gigPulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.35 } }`}</style>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {isOwner
+              ? (profile.is_discoverable ? 'Profile · Public' : 'Profile · Private')
+              : 'DJ Profile · v1.0'}
+            {profile.slug && <> · <span style={{ color: 'var(--fg)' }}>kollector.studio/{profile.slug}</span></>}
+          </span>
         </div>
 
-        {profile.bio && (
-          <div style={{ fontSize: 14, color: 'var(--fg)', lineHeight: 1.5,
-            marginBottom: 12, whiteSpace: 'pre-wrap' }}>{profile.bio}</div>
-        )}
-
-        <ProfileLinks links={profile.links} />
-
-        <div className="cs-profile-actions"
-          style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        <div className="cs-profile-actions" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {isOwner && onEdit && (
-            <button onClick={onEdit} style={{
-              padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)',
-              background: 'transparent', color: 'var(--fg)', cursor: 'pointer',
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-              letterSpacing: 1, textTransform: 'uppercase',
-            }}>Edit profile</button>
+            <button onClick={onEdit} style={ghostBtn}>Edit profile</button>
           )}
           {isOwner && onShare && (
-            <button onClick={onShare} style={{
-              padding: '8px 14px', borderRadius: 8, border: 'none',
-              background: 'var(--accent)', color: 'var(--on-accent)', cursor: 'pointer',
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-              letterSpacing: 1, textTransform: 'uppercase',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>{Icon.Share} Share profile</button>
+            <button onClick={onShare} style={solidAccentBtn}>
+              {Icon.Share} Share
+            </button>
           )}
           {!isOwner && canFollow && onFollow && (
             <button onClick={onFollow} disabled={followBusy} style={{
-              padding: '8px 16px', borderRadius: 8,
-              border: isFollowing ? '1px solid var(--border)' : 'none',
-              background: isFollowing ? 'transparent' : 'var(--accent)',
-              color: isFollowing ? 'var(--fg)' : 'var(--on-accent)',
-              cursor: followBusy ? 'default' : 'pointer',
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-              letterSpacing: 1, textTransform: 'uppercase',
+              ...(isFollowing ? ghostBtn : solidAccentBtn),
               opacity: followBusy ? 0.6 : 1,
-              minWidth: 110,
+              cursor: followBusy ? 'default' : 'pointer',
+              minWidth: 96,
             }}>{isFollowing ? 'Following' : 'Follow'}</button>
           )}
         </div>
+      </div>
+
+      {/* Hero grid: bio block (left) + portrait card with accent backdrop (right) */}
+      <div className="cs-profile-hero" style={{
+        display: 'grid', gridTemplateColumns: '1.55fr 1fr', gap: 12,
+        marginBottom: 12,
+      }}>
+        {/* Bio block */}
+        <div style={{
+          padding: '26px 26px 22px', borderRadius: 14,
+          background: 'var(--hover)', border: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 12,
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <span>◉ Bio</span>
+            {tagline && <span style={{ color: 'var(--fg)' }}>{tagline}</span>}
+          </div>
+          <h1 className="cs-profile-display" style={{
+            margin: 0, fontSize: 64, fontWeight: 800, letterSpacing: -2.4,
+            lineHeight: 0.95, wordBreak: 'break-word',
+          }}>
+            {displayName}<span style={{ color: 'var(--accent)' }}>.</span>
+          </h1>
+          {realName && (
+            <div style={{
+              marginTop: 6, fontSize: 12, color: 'var(--dim)',
+              fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.5,
+            }}>aka {realName}</div>
+          )}
+          {profile.bio && (
+            <p style={{
+              fontSize: 14, color: 'var(--fg)', lineHeight: 1.55,
+              margin: '18px 0 16px', maxWidth: '54ch',
+              whiteSpace: 'pre-wrap',
+            }}>{profile.bio}</p>
+          )}
+          <div style={{ marginTop: 'auto' }}>
+            <ProfileLinks links={profile.links} />
+          </div>
+        </div>
+
+        {/* Portrait card — solid accent backdrop, photo or avatar centered */}
+        <div className="cs-profile-portrait" style={{
+          padding: 16, borderRadius: 14,
+          background: 'var(--accent)', color: 'var(--on-accent)',
+          display: 'flex', flexDirection: 'column', minHeight: 240,
+        }}>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase', marginBottom: 10,
+            display: 'flex', alignItems: 'center', gap: 8, opacity: 0.85,
+          }}>
+            <span>◉ Portrait</span>
+            <span>· hi-res</span>
+          </div>
+          <div style={{
+            flex: 1, borderRadius: 8, overflow: 'hidden',
+            background: 'rgba(0,0,0,0.08)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            minHeight: 200,
+            backgroundImage: 'repeating-linear-gradient(135deg, rgba(0,0,0,0.06) 0 8px, transparent 8px 16px)',
+          }}>
+            {profile.photo ? (
+              <img src={profile.photo} alt={displayName}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ textAlign: 'center', padding: 16 }}>
+                <ProfileAvatar profile={profile} size={120} />
+                <div style={{
+                  marginTop: 14,
+                  fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.2,
+                  textTransform: 'uppercase', opacity: 0.8,
+                }}>{isOwner ? 'Drop a photo in Edit' : 'No portrait yet'}</div>
+              </div>
+            )}
+          </div>
+          <div style={{
+            marginTop: 10,
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.2,
+            textTransform: 'uppercase', opacity: 0.85,
+          }}>USE: PRESS · EDITORIAL</div>
+        </div>
+      </div>
+
+      {/* Fact-sheet stat strip */}
+      <div className="cs-profile-stats" style={{
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)',
+        borderRadius: 14, overflow: 'hidden',
+        background: 'var(--panel)', border: '1px solid var(--border)',
+      }}>
+        <StatCell value={setsCount} label="Sets" />
+        <StatCell value={gigsCount} label="Gigs" />
+        <StatCell value={followerCount} label="Followers"
+          onClick={onShowFollowers} />
+        <StatCell value={followingCount} label="Following"
+          onClick={onShowFollowing} />
       </div>
     </div>
   );
 }
 
-function HeaderCounter({ value, label, onClick }) {
+function StatCell({ value, label, onClick }) {
   const interactive = !!onClick;
   return (
-    <button onClick={onClick} disabled={!interactive} style={{
-      background: 'transparent', border: 'none', padding: 0,
-      color: 'var(--fg)', cursor: interactive ? 'pointer' : 'default',
-      textAlign: 'left', fontFamily: 'inherit',
-    }}>
-      <div className="cs-counter-value"
-        style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{value}</div>
+    <button onClick={onClick} disabled={!interactive} className="cs-stat-cell" style={{
+      background: 'transparent', border: 'none', borderRight: '1px solid var(--border)',
+      padding: '14px 16px', textAlign: 'left',
+      color: 'var(--fg)', fontFamily: 'inherit',
+      cursor: interactive ? 'pointer' : 'default',
+      transition: 'background 0.15s',
+    }}
+    onMouseEnter={(e) => { if (interactive) e.currentTarget.style.background = 'var(--hover)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+      <div className="cs-counter-value" style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 26, fontWeight: 700,
+        letterSpacing: -0.6, lineHeight: 1, color: 'var(--fg)',
+      }}>{value}</div>
       <div style={{
-        fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.2,
-        textTransform: 'uppercase', color: 'var(--dim)', marginTop: 4,
-      }}>{label}</div>
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+        textTransform: 'uppercase', color: 'var(--dim)', marginTop: 6,
+        display: 'flex', alignItems: 'center', gap: 6,
+      }}>{label}{interactive && <span style={{ opacity: 0.6 }}>›</span>}</div>
     </button>
   );
 }
+
+const ghostBtn = {
+  padding: '7px 12px', borderRadius: 8,
+  border: '1px solid var(--border)', background: 'transparent',
+  color: 'var(--fg)', cursor: 'pointer',
+  fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+  letterSpacing: 1, textTransform: 'uppercase',
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+};
+
+const solidAccentBtn = {
+  padding: '7px 12px', borderRadius: 8,
+  border: 'none', background: 'var(--accent)',
+  color: 'var(--on-accent)', cursor: 'pointer',
+  fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+  letterSpacing: 1, textTransform: 'uppercase',
+  display: 'inline-flex', alignItems: 'center', gap: 6,
+};
 
 function ProfileLinks({ links }) {
   const items = [
@@ -344,30 +425,38 @@ function ProfileLinks({ links }) {
 
 function ProfileTabs({ tab, setTab, calendarCount, setsCount }) {
   const items = [
-    { id: 'info', label: 'DJ info', badge: null },
+    { id: 'info', label: 'DJ Info', badge: null },
     { id: 'calendar', label: 'Calendar', badge: calendarCount },
     { id: 'sets', label: 'Sets', badge: setsCount },
   ];
   return (
-    <div style={{
-      display: 'flex', gap: 4, marginBottom: 18,
-      borderBottom: '1px solid var(--border)', padding: '0 4px',
+    <div className="cs-profile-tabs" style={{
+      display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap',
     }}>
-      {items.map(t => (
-        <button key={t.id} onClick={() => setTab(t.id)} style={{
-          padding: '10px 14px', background: 'transparent', border: 'none',
-          color: tab === t.id ? 'var(--fg)' : 'var(--dim)',
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-          letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
-          borderBottom: '2px solid ' + (tab === t.id ? 'var(--accent)' : 'transparent'),
-          marginBottom: -1, display: 'flex', alignItems: 'center', gap: 6,
-        }}>
-          {t.label}
-          {t.badge != null && t.badge > 0 && (
-            <span style={{ fontSize: 9, opacity: 0.7 }}>{t.badge}</span>
-          )}
-        </button>
-      ))}
+      {items.map(t => {
+        const active = tab === t.id;
+        return (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            padding: '9px 16px', borderRadius: 999,
+            border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
+            background: active ? 'var(--accent)' : 'transparent',
+            color: active ? 'var(--on-accent)' : 'var(--dim)',
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+            letterSpacing: 1.2, textTransform: 'uppercase', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 8,
+            transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+          }}>
+            {t.label}
+            {t.badge != null && t.badge > 0 && (
+              <span style={{
+                fontSize: 9, padding: '1px 6px', borderRadius: 8,
+                background: active ? 'rgba(0,0,0,0.18)' : 'var(--hover)',
+                color: 'inherit',
+              }}>{t.badge}</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
