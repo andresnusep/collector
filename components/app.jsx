@@ -429,6 +429,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           ...localOnly(records,   cloudRecords).map(r => window.Sync.upsertRecord(r)),
           ...localOnly(savedSets, cloudSets).map(s => window.Sync.upsertSavedSet(s)),
           ...localOnly(crates,    cloudCrates).map(c => window.Sync.upsertCrate(c)),
+          ...localOnly(gigs,      cloudGigs).map(g => window.Sync.upsertGig(g)),
         ].filter(Boolean));
       }
 
