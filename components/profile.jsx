@@ -23,7 +23,73 @@ const DEFAULT_PROFILE = {
   // never referenced from SQL.
   is_discoverable: false,
   gigsMigratedAt: null,
+  slug: '',           // vanity URL handle, enforced unique by DB index
 };
+
+// Reserved handles. Anything in here can't be claimed as a slug. Mix of
+// existing in-app routes, asset paths that share the / namespace, and a
+// few owner-claimed handles parked for later.
+const RESERVED_SLUGS = new Set([
+  'u', 'admin', 'api', 'auth',
+  'signin', 'signup', 'login', 'logout', 'signout',
+  'profile', 'profiles', 'settings', 'edit',
+  'about', 'help', 'support', 'contact', 'terms', 'privacy',
+  '404', '500', 'error',
+  'assets', 'components', 'supabase', 'frames', 'data',
+  'public', 'static', 'index', 'home', 'app',
+  'kollectorlogo', 'kollectorfav', 'kollectoricon',
+  'system', 'root', 'www', 'mail',
+  // Owner-reserved
+  'happy', 'andres', 'cabrohappy',
+]);
+
+// Convert a free-text name into a URL-safe slug. Strips diacritics so
+// "Müller" → "muller", collapses runs of non-alphanumerics into single
+// hyphens, trims leading/trailing hyphens, caps at 30 chars.
+function slugify(text) {
+  return String(text || '')
+    .toLowerCase()
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30);
+}
+
+// Build a navigable profile URL — prefer the vanity slug, fall back to the
+// legacy hash route. Used by share/copy and by internal nav inside the
+// follow list and user search modals.
+function profileNavTarget(person) {
+  if (!person) return null;
+  if (person.slug) return { kind: 'path', value: '/' + person.slug };
+  if (person.user_id) return { kind: 'hash', value: '#u/' + person.user_id };
+  return null;
+}
+
+// Apply a profileNavTarget without a full reload. Hash → set window.hash;
+// path → pushState + dispatch popstate so useHashRoute re-evaluates.
+function navigateToProfile(person) {
+  const t = profileNavTarget(person);
+  if (!t) return;
+  if (t.kind === 'hash') {
+    window.location.hash = t.value;
+  } else {
+    window.history.pushState(null, '', t.value);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+}
+
+// Returns null if the slug is valid (or empty), otherwise an error message
+// suitable for inline display under the input.
+function validateSlug(slug) {
+  if (!slug) return null; // empty = unclaimed, allowed
+  if (slug.length < 3) return 'At least 3 characters.';
+  if (slug.length > 30) return 'Up to 30 characters.';
+  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) {
+    return 'Lowercase letters, numbers, and hyphens only — no leading or trailing hyphens.';
+  }
+  if (RESERVED_SLUGS.has(slug)) return 'That handle is reserved.';
+  return null;
+}
 
 function migrateProfile(p) {
   if (!p) return { ...DEFAULT_PROFILE };
@@ -798,7 +864,11 @@ function ProfilePage({ profile, setProfile, records, savedSets, gigs, user, onSi
 
   const handleShare = () => {
     if (!user || !user.id) return;
-    const url = `${window.location.origin}/#u/${user.id}`;
+    // Vanity slug wins; falls back to the legacy hash URL when the user
+    // hasn't claimed a slug yet.
+    const url = profile?.slug
+      ? `${window.location.origin}/${profile.slug}`
+      : `${window.location.origin}/#u/${user.id}`;
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(
         () => { setShareMsg('Profile URL copied to clipboard.'); setTimeout(() => setShareMsg(''), 3500); },
@@ -847,7 +917,8 @@ function ProfilePage({ profile, setProfile, records, savedSets, gigs, user, onSi
 
 // ─────────── Public profile route (/#u/{user_id}) ───────────
 
-function PublicProfilePage({ userId, viewerSession, onExit }) {
+function PublicProfilePage({ userId: initialUserId, slug, viewerSession, onExit }) {
+  const [resolvedUserId, setResolvedUserId] = React.useState(initialUserId || null);
   const [profile, setProfileState] = React.useState(null);
   const [sets, setSets] = React.useState([]);
   const [gigs, setGigs] = React.useState([]);
@@ -856,26 +927,40 @@ function PublicProfilePage({ userId, viewerSession, onExit }) {
   const [followsModal, setFollowsModal] = React.useState(null);
 
   const viewerId = viewerSession?.user?.id || null;
-  const follow = useFollowData(userId, viewerId);
+  const follow = useFollowData(resolvedUserId, viewerId);
 
   React.useEffect(() => {
     let cancelled = false;
     setLoading(true); setNotFound(false);
+    setResolvedUserId(initialUserId || null);
     (async () => {
-      const [p, s, g] = await Promise.all([
-        window.Sync.fetchPublicProfile(userId),
-        window.Sync.fetchPublicSets(userId),
-        window.Sync.fetchPublicGigs(userId),
-      ]);
+      // Slug route resolves to a profile first; then we fetch sets + gigs by
+      // the resolved user_id. The userId route skips the slug round-trip.
+      let p = null;
+      let uid = initialUserId || null;
+      if (slug) {
+        p = await window.Sync.fetchProfileBySlug(slug);
+        if (cancelled) return;
+        if (!p) { setNotFound(true); setLoading(false); return; }
+        uid = p.user_id;
+        setResolvedUserId(uid);
+      } else if (uid) {
+        p = await window.Sync.fetchPublicProfile(uid);
+      }
       if (cancelled) return;
       if (!p) { setNotFound(true); setLoading(false); return; }
+      const [s, g] = await Promise.all([
+        window.Sync.fetchPublicSets(uid),
+        window.Sync.fetchPublicGigs(uid),
+      ]);
+      if (cancelled) return;
       setProfileState(migrateProfile(p));
       setSets(s || []);
       setGigs(g || []);
       setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [initialUserId, slug]);
 
   return (
     <div style={{
@@ -907,8 +992,8 @@ function PublicProfilePage({ userId, viewerSession, onExit }) {
             onShowFollowing={() => setFollowsModal('following')} />
         )}
       </div>
-      {followsModal && (
-        <FollowListModal kind={followsModal} userId={userId}
+      {followsModal && resolvedUserId && (
+        <FollowListModal kind={followsModal} userId={resolvedUserId}
           onClose={() => setFollowsModal(null)} />
       )}
     </div>
@@ -986,6 +1071,11 @@ function ProfileNotFound({ onExit }) {
 function EditProfileModal({ profile, user, onSignOut, onSave, onClose, onRetryBpmAnalysis }) {
   const [draft, setDraft] = React.useState(profile);
   const [genreDraft, setGenreDraft] = React.useState('');
+  // 'idle' | 'checking' | 'available' | 'taken' | 'error'
+  const [slugStatus, setSlugStatus] = React.useState('idle');
+  const [slugError, setSlugError] = React.useState(null);
+  const [saving, setSaving] = React.useState(false);
+
   const update = (patch) => setDraft(d => ({ ...d, ...patch }));
   const updateLink = (key, value) => setDraft(d => ({
     ...d, links: { ...d.links, [key]: value },
@@ -1007,9 +1097,63 @@ function EditProfileModal({ profile, user, onSignOut, onSave, onClose, onRetryBp
   };
   const removeGenre = (g) => update({ genres: draft.genres.filter(x => x !== g) });
 
-  const submit = (e) => {
+  // Auto-suggest slug from djName when the user hasn't picked one yet AND
+  // the profile didn't already have one. Doesn't fight the user once they
+  // start typing — empty draft.slug is the cue we still own the input.
+  const slugTouchedRef = React.useRef(!!profile.slug);
+  React.useEffect(() => {
+    if (slugTouchedRef.current) return;
+    if (!draft.djName) return;
+    const suggested = slugify(draft.djName);
+    if (!suggested) return;
+    update({ slug: suggested });
+  }, [draft.djName]);
+
+  // Live availability check, debounced. Skips the network when the format
+  // is invalid or the value didn't actually change from what's saved.
+  React.useEffect(() => {
+    const slug = (draft.slug || '').toLowerCase().trim();
+    if (slug === (profile.slug || '').toLowerCase().trim()) {
+      setSlugStatus('idle'); setSlugError(null); return;
+    }
+    const formatErr = validateSlug(slug);
+    if (formatErr) {
+      setSlugStatus('idle'); setSlugError(formatErr); return;
+    }
+    if (!slug) { setSlugStatus('idle'); setSlugError(null); return; }
+    setSlugStatus('checking'); setSlugError(null);
+    const t = setTimeout(async () => {
+      try {
+        const free = await window.Sync.isSlugAvailable(slug, user?.id);
+        setSlugStatus(free ? 'available' : 'taken');
+        setSlugError(free ? null : 'Already taken — try another.');
+      } catch {
+        setSlugStatus('error');
+        setSlugError("Couldn't verify. Try saving and we'll check again.");
+      }
+    }, 350);
+    return () => clearTimeout(t);
+  }, [draft.slug, profile.slug, user?.id]);
+
+  const submit = async (e) => {
     e.preventDefault();
-    onSave(draft);
+    if (saving) return;
+    const slug = (draft.slug || '').toLowerCase().trim();
+    const formatErr = validateSlug(slug);
+    if (formatErr) { setSlugError(formatErr); return; }
+    setSaving(true);
+    // Final pre-flight in case the debounce hasn't landed.
+    if (slug && slug !== (profile.slug || '').toLowerCase().trim()) {
+      const free = await window.Sync.isSlugAvailable(slug, user?.id);
+      if (!free) {
+        setSlugStatus('taken');
+        setSlugError('Already taken — try another.');
+        setSaving(false);
+        return;
+      }
+    }
+    onSave({ ...draft, slug });
+    setSaving(false);
   };
 
   return (
@@ -1055,8 +1199,10 @@ function EditProfileModal({ profile, user, onSignOut, onSave, onClose, onRetryBp
             </div>
             <div style={{ fontSize: 11, color: 'var(--dim)', lineHeight: 1.5 }}>
               When on, anyone with your profile link
-              {user?.id && (
-                <> (<code style={{ fontSize: 10 }}>kollector.studio/#u/{user.id.slice(0, 8)}…</code>)</>
+              {(draft.slug || user?.id) && (
+                <> (<code style={{ fontSize: 10 }}>kollector.studio/{
+                  draft.slug || ('#u/' + (user?.id || '').slice(0, 8) + '…')
+                }</code>)</>
               )}
               {' '}can view your DJ info, public gigs, and public sets.
               When off, your profile is invisible to everyone but you.
@@ -1074,6 +1220,51 @@ function EditProfileModal({ profile, user, onSignOut, onSave, onClose, onRetryBp
           <input value={draft.djName || ''}
             onChange={e => update({ djName: e.target.value })}
             placeholder="Stage name (shown in public)" style={fieldStyle} />
+        </EditField>
+
+        <EditField label="Profile URL">
+          <div style={{
+            display: 'flex', alignItems: 'stretch',
+            border: '1px solid ' + (slugError ? 'rgba(220,60,60,0.6)' : 'var(--border)'),
+            borderRadius: 8, background: 'var(--hover)', overflow: 'hidden',
+          }}>
+            <span style={{
+              padding: '10px 0 10px 12px',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 13,
+              color: 'var(--dim)', whiteSpace: 'nowrap',
+            }}>kollector.studio/</span>
+            <input value={draft.slug || ''}
+              onChange={e => {
+                slugTouchedRef.current = true;
+                update({ slug: e.target.value.toLowerCase() });
+              }}
+              placeholder={draft.djName ? slugify(draft.djName) : 'yourname'}
+              style={{
+                flex: 1, minWidth: 0, padding: '10px 12px',
+                background: 'transparent', border: 'none', outline: 'none',
+                color: 'var(--fg)', fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 13,
+              }} />
+            {slugStatus === 'checking' && (
+              <span style={slugStatusBadge('var(--dim)')}>…</span>
+            )}
+            {slugStatus === 'available' && (
+              <span style={slugStatusBadge('var(--accent)')}>✓</span>
+            )}
+            {slugStatus === 'taken' && (
+              <span style={slugStatusBadge('rgba(220,60,60,0.9)')}>✕</span>
+            )}
+          </div>
+          {slugError ? (
+            <div style={{ fontSize: 11, color: 'rgba(220,80,80,0.95)',
+              marginTop: 4 }}>{slugError}</div>
+          ) : (
+            <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 4,
+              lineHeight: 1.4 }}>
+              3–30 chars, lowercase letters / numbers / hyphens. Auto-filled
+              from your DJ name; edit any time.
+            </div>
+          )}
         </EditField>
 
         <EditField label="Real name">
@@ -1189,7 +1380,12 @@ function EditProfileModal({ profile, user, onSignOut, onSave, onClose, onRetryBp
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
           <button type="button" onClick={onClose} style={secondaryBtn}>Cancel</button>
-          <button type="submit" style={primaryBtn}>Save</button>
+          <button type="submit" disabled={saving || slugStatus === 'taken'}
+            style={{
+              ...primaryBtn,
+              opacity: (saving || slugStatus === 'taken') ? 0.5 : 1,
+              cursor: (saving || slugStatus === 'taken') ? 'default' : 'pointer',
+            }}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </form>
     </div>
@@ -1299,8 +1495,8 @@ function FollowListModal({ kind, userId, onClose }) {
     return () => { cancelled = true; };
   }, [kind, userId]);
 
-  const goTo = (uid) => {
-    window.location.hash = '#u/' + uid;
+  const goTo = (person) => {
+    navigateToProfile(person);
     onClose();
   };
 
@@ -1336,7 +1532,7 @@ function FollowListModal({ kind, userId, onClose }) {
         {people && people.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {people.map(p => (
-              <button key={p.user_id} onClick={() => goTo(p.user_id)}
+              <button key={p.user_id} onClick={() => goTo(p)}
                 style={followRowStyle}>
                 <ProfileAvatar profile={p} size={42} />
                 <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
@@ -1386,8 +1582,8 @@ function UserSearchModal({ onClose, viewerId }) {
     return () => { cancelled = true; };
   }, [debounced, viewerId]);
 
-  const goTo = (uid) => {
-    window.location.hash = '#u/' + uid;
+  const goTo = (person) => {
+    navigateToProfile(person);
     onClose();
   };
 
@@ -1440,7 +1636,7 @@ function UserSearchModal({ onClose, viewerId }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6,
             maxHeight: 460, overflowY: 'auto' }}>
             {results.map(p => (
-              <button key={p.user_id} onClick={() => goTo(p.user_id)}
+              <button key={p.user_id} onClick={() => goTo(p)}
                 style={followRowStyle}>
                 <ProfileAvatar profile={p} size={42} />
                 <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
@@ -1470,6 +1666,17 @@ function UserSearchModal({ onClose, viewerId }) {
   );
 }
 
+// Trailing badge inside the Profile URL field — shows the live availability
+// state without competing with the input typography.
+function slugStatusBadge(color) {
+  return {
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    width: 36, color: color,
+    fontFamily: 'JetBrains Mono, monospace', fontSize: 13, fontWeight: 700,
+    background: 'transparent', borderLeft: '1px solid var(--border)',
+  };
+}
+
 const followRowStyle = {
   display: 'flex', alignItems: 'center', gap: 12,
   padding: '10px 12px', borderRadius: 10,
@@ -1482,4 +1689,5 @@ Object.assign(window, {
   ProfilePage, ProfileAvatar, PublicProfilePage,
   DEFAULT_PROFILE, migrateProfile,
   UserSearchModal, FollowListModal,
+  RESERVED_SLUGS, slugify, validateSlug,
 });

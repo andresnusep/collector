@@ -128,6 +128,31 @@ const Sync = {
     if (error) { console.warn('[gigs] fetch public', error); return []; }
     return (data || []).map(r => r.data);
   },
+  // Resolve a vanity slug → profile. Anon-readable through the same RLS
+  // policy that gates is_discoverable, so signed-out visitors hitting
+  // kollector.studio/{slug} can land on the public profile.
+  fetchProfileBySlug: async (slug) => {
+    if (!slug) return null;
+    const { data, error } = await sb().from('profiles')
+      .select('user_id, data')
+      .eq('data->>slug', slug.toLowerCase())
+      .maybeSingle();
+    if (error) { console.warn('[profiles] fetchBySlug', error); return null; }
+    return data ? { user_id: data.user_id, ...(data.data || {}) } : null;
+  },
+  // Pre-flight uniqueness check used by the EditProfileModal before save
+  // so we surface "already taken" inline instead of as a write error.
+  // Returns true if the slug is free OR already belongs to viewerUserId.
+  isSlugAvailable: async (slug, viewerUserId) => {
+    if (!slug) return true;
+    const { data, error } = await sb().from('profiles')
+      .select('user_id')
+      .eq('data->>slug', slug.toLowerCase())
+      .limit(1);
+    if (error) { console.warn('[profiles] isSlugAvailable', error); return false; }
+    if (!data || data.length === 0) return true;
+    return data[0].user_id === viewerUserId;
+  },
   // Discover DJs — used by the user-search UI. Returns minimal display rows
   // for any profile flagged is_discoverable. RLS already restricts what anon
   // can read, so this is safe even when called from a signed-out viewer.
@@ -148,6 +173,7 @@ const Sync = {
         photo: r.data.photo || '',
         location: r.data.location || '',
         bio: r.data.bio || '',
+        slug: r.data.slug || '',
       }))
       .filter(p => {
         if (!q) return true;

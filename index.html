@@ -2,6 +2,22 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<!-- SPA path-based routing decoder. 404.html redirects /djname to /?/djname;
+     this script reverses that back to /djname before the SPA boots so the
+     address bar matches what the user typed. Runs synchronously to beat
+     React rendering. -->
+<script type="text/javascript">
+  (function(l) {
+    if (l.search && l.search[1] === '/') {
+      var decoded = l.search.slice(1).split('&').map(function(s) {
+        return s.replace(/~and~/g, '&');
+      }).join('?');
+      window.history.replaceState(null, null,
+        l.pathname.slice(0, -1) + decoded + l.hash
+      );
+    }
+  }(window.location));
+</script>
 <title>Kollector Studio — for vinyl DJs</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <meta name="description" content="A studio for vinyl DJs: catalog your collection, organize crates, build sets with harmonic mixing, and log your gigs." />
@@ -224,19 +240,40 @@
 </script>
 
 <script type="text/babel">
-// Tiny hash-based router. Returns { kind: 'profile', userId } for #u/{user_id}
-// URLs, otherwise { kind: 'app' }. Updates whenever the hash changes so
-// navigation feels native (back button, bookmarks, manual edits all work).
+// Hash + pathname router. Resolves three things in priority order:
+//   1. /#u/{user_id} — legacy hash route, kept for backwards compat with old
+//      shared links.
+//   2. /{slug} — pathname route. Reaches the SPA via the 404.html redirect
+//      trick on GitHub Pages (see 404.html and the early script in <head>).
+//   3. fallthrough = the regular app shell.
+// Re-evaluates on hashchange + popstate so back/forward + manual hash edits
+// + programmatic navigation all stay in sync.
 function useHashRoute() {
-  const parse = (hash) => {
-    const m = (hash || '').match(/^#u\/([^/?]+)/);
-    return m ? { kind: 'profile', userId: decodeURIComponent(m[1]) } : { kind: 'app' };
+  const parse = () => {
+    const hashMatch = (window.location.hash || '').match(/^#u\/([^/?]+)/);
+    if (hashMatch) {
+      return { kind: 'profile', userId: decodeURIComponent(hashMatch[1]) };
+    }
+    const path = (window.location.pathname || '/').replace(/^\/+|\/+$/g, '');
+    if (!path) return { kind: 'app' };
+    // Single-segment, slug-shaped, not a reserved route
+    const reserved = window.RESERVED_SLUGS;
+    if (/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(path) &&
+        !path.includes('/') &&
+        (!reserved || !reserved.has(path))) {
+      return { kind: 'profile', slug: path };
+    }
+    return { kind: 'app' };
   };
-  const [route, setRoute] = React.useState(() => parse(window.location.hash));
+  const [route, setRoute] = React.useState(parse);
   React.useEffect(() => {
-    const onHash = () => setRoute(parse(window.location.hash));
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    const onChange = () => setRoute(parse());
+    window.addEventListener('hashchange', onChange);
+    window.addEventListener('popstate', onChange);
+    return () => {
+      window.removeEventListener('hashchange', onChange);
+      window.removeEventListener('popstate', onChange);
+    };
   }, []);
   return route;
 }
@@ -307,8 +344,17 @@ function Root() {
   if (route.kind === 'profile') {
     return (
       <div className={`app ${tweaks.theme}`}>
-        <PublicProfilePage userId={route.userId} viewerSession={session}
-          onExit={() => { window.location.hash = ''; }} />
+        <PublicProfilePage
+          userId={route.userId} slug={route.slug}
+          viewerSession={session}
+          onExit={() => {
+            // Clear both pathname and hash so we land on the bare app root.
+            // Use replaceState so the public URL doesn't pile up in history.
+            if (window.location.pathname !== '/' || window.location.hash) {
+              window.history.replaceState(null, '', '/');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }
+          }} />
       </div>
     );
   }
