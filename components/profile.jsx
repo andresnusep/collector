@@ -189,8 +189,7 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount,
   const displayName = profile.djName || profile.name || 'Unnamed DJ';
   const realName = profile.djName && profile.name && profile.djName !== profile.name
     ? profile.name : null;
-  const tagline = [profile.location, (profile.genres || []).slice(0, 3).join(' · ')]
-    .filter(Boolean).join(' · ');
+  const visibleGenres = (profile.genres || []).slice(0, 8);
 
   return (
     <div style={{ marginBottom: 18 }}>
@@ -215,7 +214,12 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount,
             {isOwner
               ? (profile.is_discoverable ? 'Profile · Public' : 'Profile · Private')
               : 'DJ Profile · v1.0'}
-            {profile.slug && <> · <span style={{ color: 'var(--fg)' }}>kollector.studio/{profile.slug}</span></>}
+            {profile.slug && (
+              <span className="cs-profile-bar-slug">
+                {' · '}
+                <span style={{ color: 'var(--fg)' }}>kollector.studio/{profile.slug}</span>
+              </span>
+            )}
           </span>
         </div>
 
@@ -250,13 +254,29 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount,
           background: 'var(--hover)', border: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column',
         }}>
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
-            textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 12,
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}>
-            <span>◉ Bio</span>
-            {tagline && <span style={{ color: 'var(--fg)' }}>{tagline}</span>}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+              textTransform: 'uppercase', color: 'var(--dim)',
+              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            }}>
+              <span>◉ Bio</span>
+              {profile.location && (
+                <span style={{ color: 'var(--fg)' }}>{profile.location}</span>
+              )}
+            </div>
+            {visibleGenres.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                {visibleGenres.map(g => (
+                  <span key={g} style={{
+                    padding: '4px 10px', borderRadius: 999,
+                    background: 'var(--accent)', color: 'var(--on-accent)',
+                    fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+                    letterSpacing: 1, textTransform: 'uppercase',
+                  }}>{g}</span>
+                ))}
+              </div>
+            )}
           </div>
           <h1 className="cs-profile-display" style={{
             margin: 0, fontSize: 64, fontWeight: 800, letterSpacing: -2.4,
@@ -1059,11 +1079,15 @@ function PublicProfilePage({ userId: initialUserId, slug, viewerSession, onExit 
 
   return (
     <div style={{
-      minHeight: '100vh', background: 'var(--bg)', color: 'var(--fg)',
+      // Body has overflow:hidden globally, so the public route owns its own
+      // scroll container — otherwise the page is "stuck" past the viewport.
+      height: '100vh', overflowY: 'auto',
+      background: 'var(--bg)', color: 'var(--fg)',
       fontFamily: 'Space Grotesk, -apple-system, system-ui, sans-serif',
+      WebkitOverflowScrolling: 'touch',
     }}>
       <PublicTopBar viewerSession={viewerSession} onExit={onExit} />
-      <div style={{ padding: '24px 20px' }}>
+      <div style={{ padding: '24px 20px 60px' }}>
         {loading && (
           <div style={{
             padding: 60, textAlign: 'center', color: 'var(--dim)',

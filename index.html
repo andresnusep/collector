@@ -121,6 +121,11 @@
       align-items: flex-start !important;
       gap: 10px !important;
     }
+    /* Slug URL is too long for narrow viewports — drop it from the bar.
+       Address bar still shows the URL, share button still copies it. */
+    .cs-profile-bar-slug {
+      display: none !important;
+    }
     .cs-profile-actions {
       width: 100% !important;
     }
