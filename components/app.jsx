@@ -513,18 +513,71 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     prevRecordsRef.current = records;
   }, [records, hydrated]);
 
-  // Write-through: saved sets
+  // Build a denormalized snapshot of the tracks in a saved set, so public
+  // viewers (who don't have window.RECORDS loaded in their browser) can still
+  // render the track list with title / artist / BPM / key. Generated at
+  // upsert time using the owner's local records — accurate as of the moment
+  // they last edited the set.
+  const buildSetSnapshot = React.useCallback((trackIds) => {
+    return (trackIds || []).map(tid => {
+      const p = window.parseTrackId ? window.parseTrackId(tid) : null;
+      if (!p) return { tid };
+      return {
+        tid,
+        title: p.track.title || '',
+        artist: p.record.artist || '',
+        bpm: p.track.bpm ?? null,
+        key: p.track.key ?? null,
+        len: p.track.len || null,
+        n: p.track.n || null,
+        recordTitle: p.record.title || '',
+        cover: p.record.cover ? {
+          hue: p.record.cover.hue,
+          shape: p.record.cover.shape,
+          image: p.record.cover.image || null,
+        } : null,
+      };
+    });
+  }, []);
+
+  // Write-through: saved sets. Each upsert regenerates trackSnapshot so the
+  // public-route view stays current with the owner's collection.
   React.useEffect(() => {
     if (!hydrated) return;
     const prev = prevSetsRef.current || [];
     window.diffArraySync({
       prev, curr: savedSets,
       getId: (s) => s.id,
-      onUpsert: (s) => window.Sync.upsertSavedSet(s),
+      onUpsert: (s) => {
+        const snap = buildSetSnapshot(s.trackIds);
+        window.Sync.upsertSavedSet({ ...s, trackSnapshot: snap });
+      },
       onDelete: (id) => window.Sync.deleteSavedSet(id),
     });
     prevSetsRef.current = savedSets;
-  }, [savedSets, hydrated]);
+  }, [savedSets, hydrated, buildSetSnapshot]);
+
+  // One-shot snapshot upgrade: any pre-existing set without a trackSnapshot
+  // gets one as soon as records are loaded post-hydration. Triggers a single
+  // re-upsert per such set; subsequent runs are no-ops.
+  const setsSnapshotMigratedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!hydrated || records.length === 0) return;
+    if (setsSnapshotMigratedRef.current) return;
+    setsSnapshotMigratedRef.current = true;
+    setSavedSets(ss => {
+      let changed = false;
+      const next = ss.map(s => {
+        if (Array.isArray(s.trackSnapshot)) return s;
+        if (!s.trackIds || s.trackIds.length === 0) return s;
+        const snap = buildSetSnapshot(s.trackIds);
+        if (snap.length === 0) return s;
+        changed = true;
+        return { ...s, trackSnapshot: snap };
+      });
+      return changed ? next : ss;
+    });
+  }, [hydrated, records.length, buildSetSnapshot]);
 
   // Write-through: crates
   React.useEffect(() => {

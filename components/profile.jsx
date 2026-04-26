@@ -680,17 +680,42 @@ function ProfileSetsPanel({ sets, isOwner }) {
 function ProfileSetCard({ set, isOwner, playingTid, loadingTid, missTid, onTogglePreview }) {
   const [expanded, setExpanded] = React.useState(false);
 
-  // Resolve trackIds via the global parseTrackId. Works on the in-app /profile
-  // (records are loaded) and on the public route only when the visitor
-  // happens to be the owner — a non-owner viewing the public URL won't have
-  // the records populated, so resolved is empty and we fall back to a
-  // placeholder count + a friendly note.
+  // Resolve trackIds in two passes:
+  //   1. parseTrackId — works for owners (records loaded). Always-fresh data.
+  //   2. trackSnapshot — denormalized at save time, baked into the saved_set
+  //      row. Works for non-owner public viewers who don't have records
+  //      loaded. Slightly stale but accurate as of the last save.
+  // Owners see fresh data; visitors get the snapshot. Either way the public
+  // route renders a real track list now instead of a "Sign in to see" stub.
   const resolved = React.useMemo(() => {
-    if (!window.parseTrackId) return [];
-    return (set.trackIds || []).map(tid => {
-      const p = window.parseTrackId(tid);
-      return p ? { tid, ...p } : null;
-    }).filter(Boolean);
+    if (window.parseTrackId) {
+      const fromRecords = (set.trackIds || []).map(tid => {
+        const p = window.parseTrackId(tid);
+        return p ? { tid, ...p } : null;
+      });
+      if (fromRecords.length > 0 && fromRecords.every(Boolean)) return fromRecords;
+    }
+    if (Array.isArray(set.trackSnapshot)) {
+      return set.trackSnapshot
+        .filter(s => s && s.tid)
+        .map(s => ({
+          tid: s.tid,
+          record: {
+            artist: s.artist || '',
+            title: s.recordTitle || s.title || '',
+            cover: s.cover || { hue: 0, shape: 'flat' },
+          },
+          track: {
+            title: s.title || '',
+            artist: s.artist || '',
+            bpm: s.bpm ?? null,
+            key: s.key ?? null,
+            len: s.len || null,
+            n: s.n || null,
+          },
+        }));
+    }
+    return [];
   }, [set]);
 
   const trackCount = (set.trackIds || []).length;
@@ -788,8 +813,8 @@ function ProfileSetCard({ set, isOwner, playingTid, loadingTid, missTid, onToggl
               padding: 14, textAlign: 'center', fontSize: 11,
               color: 'var(--dim)', fontStyle: 'italic',
             }}>
-              {trackCount} track{trackCount === 1 ? '' : 's'}. Sign in to see the
-              full track list and previews.
+              {trackCount} track{trackCount === 1 ? '' : 's'} — track list not
+              available yet. The owner can re-save this set to publish it.
             </div>
           )}
         </div>
