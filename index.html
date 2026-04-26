@@ -245,6 +245,9 @@
 //      shared links.
 //   2. /{slug} — pathname route. Reaches the SPA via the 404.html redirect
 //      trick on GitHub Pages (see 404.html and the early script in <head>).
+//      Reserved words still resolve as profile attempts; they just have no
+//      claimed profile so PublicProfilePage shows the "not found" panel.
+//      That's better UX than dumping into the workspace shell.
 //   3. fallthrough = the regular app shell.
 // Re-evaluates on hashchange + popstate so back/forward + manual hash edits
 // + programmatic navigation all stay in sync.
@@ -254,13 +257,20 @@ function useHashRoute() {
     if (hashMatch) {
       return { kind: 'profile', userId: decodeURIComponent(hashMatch[1]) };
     }
-    const path = (window.location.pathname || '/').replace(/^\/+|\/+$/g, '');
+    let path = (window.location.pathname || '/').replace(/^\/+|\/+$/g, '');
     if (!path) return { kind: 'app' };
-    // Single-segment, slug-shaped, not a reserved route
-    const reserved = window.RESERVED_SLUGS;
-    if (/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(path) &&
-        !path.includes('/') &&
-        (!reserved || !reserved.has(path))) {
+    if (path.includes('/')) return { kind: 'app' }; // multi-segment = not a slug
+    // Auto-normalize uppercase paths so /Andres becomes /andres without the
+    // user noticing. Slugs are always stored lowercase.
+    const lower = path.toLowerCase();
+    if (lower !== path) {
+      try {
+        window.history.replaceState(null, '',
+          '/' + lower + window.location.search + window.location.hash);
+      } catch {}
+      path = lower;
+    }
+    if (/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(path)) {
       return { kind: 'profile', slug: path };
     }
     return { kind: 'app' };
