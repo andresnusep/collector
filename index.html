@@ -96,6 +96,47 @@
     filter: invert(1) hue-rotate(180deg);
   }
 
+  /* Profile header layout. Inline JSX styles set the desktop sizing; these
+     overrides kick in on phone widths (<540px) where four counters next to
+     a 120px avatar push the last counter off-screen. The avatar selector
+     reaches inside ProfileAvatar's inline-styled wrapper, so we use
+     !important to defeat the inline width/height. */
+  @media (max-width: 540px) {
+    .cs-profile-header {
+      gap: 14px !important;
+      padding: 16px 16px 20px !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      text-align: center !important;
+    }
+    .cs-profile-header .cs-profile-avatar,
+    .cs-profile-header .cs-profile-avatar > * {
+      width: 88px !important;
+      height: 88px !important;
+    }
+    .cs-profile-header .cs-profile-meta {
+      width: 100% !important;
+    }
+    .cs-profile-name-row {
+      justify-content: center !important;
+    }
+    .cs-profile-counters {
+      gap: 16px !important;
+      flex-wrap: wrap !important;
+      justify-content: center !important;
+    }
+    .cs-profile-counters > button {
+      flex: 0 0 auto;
+      min-width: 64px;
+    }
+    .cs-profile-counters .cs-counter-value {
+      font-size: 16px !important;
+    }
+    .cs-profile-actions {
+      justify-content: center !important;
+    }
+  }
+
   /* iOS zooms <input>/<textarea>/<select> on focus if font-size < 16px. Force
      16px on mobile viewports to disable the zoom, overriding inline styles
      that use smaller fonts for visual density on desktop. */

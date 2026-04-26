@@ -101,7 +101,7 @@ function migrateProfile(p) {
   };
 }
 
-function ProfileAvatar({ profile, size = 40, onClick }) {
+function ProfileAvatar({ profile, size = 40, onClick, className }) {
   const initials = (profile.djName || profile.name || '?')
     .split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
   const content = profile.photo ? (
@@ -121,12 +121,13 @@ function ProfileAvatar({ profile, size = 40, onClick }) {
   };
   if (onClick) {
     return (
-      <button onClick={onClick} style={{ ...wrapperStyle, border: 'none', padding: 0, cursor: 'pointer' }}>
+      <button className={className} onClick={onClick}
+        style={{ ...wrapperStyle, border: 'none', padding: 0, cursor: 'pointer' }}>
         {content}
       </button>
     );
   }
-  return <div style={wrapperStyle}>{content}</div>;
+  return <div className={className} style={wrapperStyle}>{content}</div>;
 }
 
 // ─────────── Shared profile layout (Instagram-style) ───────────
@@ -189,15 +190,16 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount,
   const realName = profile.djName && profile.name && profile.djName !== profile.name
     ? profile.name : null;
   return (
-    <div style={{
+    <div className="cs-profile-header" style={{
       display: 'flex', gap: 24, alignItems: 'flex-start',
       padding: '20px 24px 24px', borderRadius: 14,
       background: 'var(--hover)', border: '1px solid var(--border)',
       marginBottom: 14,
     }}>
-      <ProfileAvatar profile={profile} size={120} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap',
+      <ProfileAvatar profile={profile} size={120}
+        className="cs-profile-avatar" />
+      <div className="cs-profile-meta" style={{ flex: 1, minWidth: 0 }}>
+        <div className="cs-profile-name-row" style={{ display: 'flex', flexWrap: 'wrap',
           gap: 12, alignItems: 'center', marginBottom: 6 }}>
           <div style={{ fontSize: 28, fontWeight: 700, letterSpacing: -0.6,
             overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
@@ -227,8 +229,10 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount,
         )}
 
         {/* Inline counters — IG-style. Followers/Following are clickable to
-            open the list modals; Sets/Gigs are static counts. */}
-        <div style={{ display: 'flex', gap: 22, marginBottom: 12 }}>
+            open the list modals; Sets/Gigs are static counts. flex-wrap so
+            narrow phone screens drop to a second row instead of overflowing. */}
+        <div className="cs-profile-counters" style={{ display: 'flex',
+          flexWrap: 'wrap', gap: 22, marginBottom: 12 }}>
           <HeaderCounter value={setsCount} label="Sets" />
           <HeaderCounter value={gigsCount} label="Gigs" />
           <HeaderCounter value={followerCount} label="Followers"
@@ -244,7 +248,8 @@ function ProfileHeader({ profile, isOwner, setsCount, gigsCount,
 
         <ProfileLinks links={profile.links} />
 
-        <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+        <div className="cs-profile-actions"
+          style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           {isOwner && onEdit && (
             <button onClick={onEdit} style={{
               padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)',
@@ -289,7 +294,8 @@ function HeaderCounter({ value, label, onClick }) {
       color: 'var(--fg)', cursor: interactive ? 'pointer' : 'default',
       textAlign: 'left', fontFamily: 'inherit',
     }}>
-      <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{value}</div>
+      <div className="cs-counter-value"
+        style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{value}</div>
       <div style={{
         fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.2,
         textTransform: 'uppercase', color: 'var(--dim)', marginTop: 4,
