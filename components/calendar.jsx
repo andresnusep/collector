@@ -123,12 +123,16 @@ function GigRow({ gig, savedSets, onEdit, onDelete }) {
       padding: '14px 16px', borderRadius: 10,
       background: 'var(--panel)', border: '1px solid var(--border)',
     }}>
-      <div style={{
-        width: 86, flexShrink: 0,
-        fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
-        color: 'var(--accent)', fontWeight: 700, letterSpacing: 0.5,
-        textTransform: 'uppercase',
-      }}>{dateLabel}</div>
+      <div style={{ flexShrink: 0 }}>
+        <span style={{
+          display: 'inline-block',
+          padding: '5px 10px', borderRadius: 999,
+          background: 'var(--accent)', color: 'var(--on-accent)',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+          fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+          whiteSpace: 'nowrap',
+        }}>{dateLabel}</span>
+      </div>
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline',

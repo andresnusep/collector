@@ -580,12 +580,16 @@ function ProfileGigRow({ gig, isOwner }) {
       // which entries are not on their public profile.
       opacity: isOwner && !gig.is_public ? 0.6 : 1,
     }}>
-      <div style={{
-        width: 80, flexShrink: 0,
-        fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
-        color: 'var(--accent)', fontWeight: 700, letterSpacing: 0.5,
-        textTransform: 'uppercase',
-      }}>{gig.playedAt ? formatDate(gig.playedAt) : '—'}</div>
+      <div style={{ flexShrink: 0 }}>
+        <span style={{
+          display: 'inline-block',
+          padding: '5px 10px', borderRadius: 999,
+          background: 'var(--accent)', color: 'var(--on-accent)',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+          fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+          whiteSpace: 'nowrap',
+        }}>{gig.playedAt ? formatDate(gig.playedAt) : 'TBD'}</span>
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3 }}>

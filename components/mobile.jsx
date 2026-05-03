@@ -1324,12 +1324,16 @@ function MobileGigRow({ gig, savedSets, onEdit, onDelete, accent, fg, soft, bord
       borderRadius: 10, background: soft, border: `1px solid ${border}`,
       color: fg, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
     }}>
-      <div style={{
-        width: 54, flexShrink: 0,
-        fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
-        color: accent, fontWeight: 700, letterSpacing: 0.5,
-        textTransform: 'uppercase', lineHeight: 1.3,
-      }}>{dateLabel}</div>
+      <div style={{ flexShrink: 0, alignSelf: 'flex-start' }}>
+        <span style={{
+          display: 'inline-block',
+          padding: '4px 8px', borderRadius: 999,
+          background: accent, color: '#0E0C0A',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+          fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase',
+          whiteSpace: 'nowrap',
+        }}>{dateLabel}</span>
+      </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <div style={{ fontSize: 13, fontWeight: 700,
