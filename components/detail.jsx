@@ -1,12 +1,14 @@
 // Record detail drawer — track-level add to set
 
-function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, onRateTrack, onRefreshTrackBpm, onRefreshDiscogs, onRefreshAlbumBpms }) {
+function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, savedSets, onToggleTrackInSavedSet, onCreateSetWithTrack, onRateTrack, onRefreshTrackBpm, onRefreshDiscogs, onRefreshAlbumBpms }) {
   const [playing, setPlaying] = React.useState(null);
   const [progress, setProgress] = React.useState({});
   const [audioMap, setAudioMap] = React.useState({}); // trackId -> object URL
   const [previewMap, setPreviewMap] = React.useState({}); // trackId -> iTunes preview URL
   const [bpmRefreshing, setBpmRefreshing] = React.useState({}); // trackIndex -> bool
   const [bpmMissed, setBpmMissed] = React.useState({}); // trackIndex -> bool (one-shot flash)
+  // Per-track add menu — open by trackIndex; null = closed.
+  const [addMenuFor, setAddMenuFor] = React.useState(null);
   const audioRef = React.useRef(null);
 
   const handleRefreshBpm = async (trackIndex) => {
@@ -345,13 +347,15 @@ function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTra
                     </svg>
                   </button>
                 )}
-                <button onClick={() => onAddTrack(record, i)} style={{
-                  width: 28, height: 28, borderRadius: 14, border: 'none',
-                  background: added ? 'var(--accent)' : 'var(--border)',
-                  color: added ? 'var(--on-accent)' : 'var(--fg)',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  flexShrink: 0,
-                }}>{added ? Icon.Check : Icon.Plus}</button>
+                <button onClick={() => setAddMenuFor(i)}
+                  title="Add to a set"
+                  style={{
+                    width: 28, height: 28, borderRadius: 14, border: 'none',
+                    background: added ? 'var(--accent)' : 'var(--border)',
+                    color: added ? 'var(--on-accent)' : 'var(--fg)',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>{added ? Icon.Check : Icon.Plus}</button>
               </div>
             );
           })}
@@ -390,8 +394,197 @@ function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTra
           </div>
         </div>
       )}
+
+      {addMenuFor !== null && (
+        <TrackAddMenu
+          record={record} trackIndex={addMenuFor}
+          isInBuilder={isTrackInSet(`${record.id}-${addMenuFor}`)}
+          savedSets={savedSets || []}
+          onToggleBuilder={() => onAddTrack(record, addMenuFor)}
+          onToggleInSavedSet={(setId) =>
+            onToggleTrackInSavedSet && onToggleTrackInSavedSet(setId, record.id, addMenuFor)}
+          onCreateSetWithTrack={(name) =>
+            onCreateSetWithTrack && onCreateSetWithTrack(name, record.id, addMenuFor)}
+          onClose={() => setAddMenuFor(null)} />
+      )}
     </div>
   );
+}
+
+// Modal that lets the user route a track to either the live builder or any
+// saved set, plus spin up a brand-new set from this single track. Replaces
+// the old direct-toggle on the per-track + button so DJs never have to
+// detour through the builder when they know exactly where a song belongs.
+function TrackAddMenu({ record, trackIndex, isInBuilder, savedSets,
+                       onToggleBuilder, onToggleInSavedSet,
+                       onCreateSetWithTrack, onClose }) {
+  const track = record.tracks[trackIndex];
+  if (!track) return null;
+  const tid = `${record.id}-${trackIndex}`;
+  const [creatingNew, setCreatingNew] = React.useState(false);
+  const [newSetName, setNewSetName] = React.useState('');
+
+  const handleCreate = (e) => {
+    if (e) e.preventDefault();
+    onCreateSetWithTrack(newSetName);
+    onClose();
+  };
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, zIndex: 220,
+      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        width: 380, maxWidth: '100%', background: 'var(--panel)',
+        border: '1px solid var(--border)', borderRadius: 12,
+        color: 'var(--fg)', boxShadow: '0 30px 80px rgba(0,0,0,0.5)',
+        maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{
+          padding: '16px 18px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+          gap: 12,
+        }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+              textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 2,
+            }}>Add to</div>
+            <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {track.title}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 2,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {record.artist}
+            </div>
+          </div>
+          <IconButton onClick={onClose} title="Close">{Icon.X}</IconButton>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 12px' }}>
+          {/* Builder — always visible at top as the quick option */}
+          <button onClick={() => { onToggleBuilder(); onClose(); }}
+            style={trackAddRowStyle(isInBuilder)}>
+            <span style={{ flex: 1, textAlign: 'left' }}>
+              <span style={{ display: 'block', fontWeight: 700, fontSize: 13 }}>
+                Set Builder
+              </span>
+              <span style={{
+                display: 'block', fontSize: 10, color: 'var(--dim)',
+                fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.5,
+                textTransform: 'uppercase', marginTop: 2,
+              }}>{isInBuilder ? 'In current builder' : 'Live drag-and-drop set'}</span>
+            </span>
+            <span style={trackAddCheckStyle(isInBuilder)}>
+              {isInBuilder ? Icon.Check : Icon.Plus}
+            </span>
+          </button>
+
+          {savedSets.length > 0 && (
+            <div style={{
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+              textTransform: 'uppercase', color: 'var(--dim)',
+              padding: '14px 8px 6px',
+            }}>Saved sets</div>
+          )}
+
+          {savedSets.map(s => {
+            const has = (s.trackIds || []).includes(tid);
+            return (
+              <button key={s.id}
+                onClick={() => { onToggleInSavedSet(s.id); onClose(); }}
+                style={trackAddRowStyle(has)}>
+                <span style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
+                  <span style={{
+                    display: 'block', fontWeight: 600, fontSize: 13,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{s.name || 'Untitled set'}</span>
+                  <span style={{
+                    display: 'block', fontSize: 10, color: 'var(--dim)',
+                    fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.5,
+                    marginTop: 2,
+                  }}>{(s.trackIds || []).length} tracks
+                    {s.is_public && <> · <span style={{ color: 'var(--accent)' }}>public</span></>}
+                  </span>
+                </span>
+                <span style={trackAddCheckStyle(has)}>
+                  {has ? Icon.Check : Icon.Plus}
+                </span>
+              </button>
+            );
+          })}
+
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase', color: 'var(--dim)',
+            padding: '14px 8px 6px',
+          }}>Or create</div>
+
+          {creatingNew ? (
+            <form onSubmit={handleCreate} style={{
+              display: 'flex', gap: 6, padding: 6,
+              border: '1px solid var(--accent)', borderRadius: 8,
+              background: 'var(--hover)',
+            }}>
+              <input autoFocus value={newSetName}
+                onChange={e => setNewSetName(e.target.value)}
+                placeholder="Set name (optional)"
+                style={{
+                  flex: 1, minWidth: 0, padding: '8px 10px', borderRadius: 6,
+                  background: 'transparent', border: 'none', outline: 'none',
+                  color: 'var(--fg)', fontSize: 13, fontFamily: 'inherit',
+                }} />
+              <button type="submit" style={{
+                padding: '8px 14px', borderRadius: 6, border: 'none',
+                background: 'var(--accent)', color: 'var(--on-accent)',
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+                letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+              }}>Create</button>
+            </form>
+          ) : (
+            <button onClick={() => setCreatingNew(true)}
+              style={{
+                ...trackAddRowStyle(false),
+                borderStyle: 'dashed',
+              }}>
+              <span style={{ flex: 1, textAlign: 'left', fontWeight: 600, fontSize: 13 }}>
+                + New set with this track
+              </span>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function trackAddRowStyle(active) {
+  return {
+    width: '100%',
+    display: 'flex', alignItems: 'center', gap: 10,
+    padding: '10px 12px', marginBottom: 4,
+    borderRadius: 8,
+    background: active ? 'color-mix(in oklab, var(--accent) 14%, transparent)' : 'var(--hover)',
+    border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
+    color: 'var(--fg)', fontFamily: 'inherit',
+    cursor: 'pointer', textAlign: 'left',
+    transition: 'background 0.15s, border-color 0.15s',
+  };
+}
+
+function trackAddCheckStyle(active) {
+  return {
+    width: 26, height: 26, borderRadius: 13, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: active ? 'var(--accent)' : 'transparent',
+    color: active ? 'var(--on-accent)' : 'var(--dim)',
+    border: active ? 'none' : '1px solid var(--border)',
+  };
 }
 
 function Stat({ label, value }) {

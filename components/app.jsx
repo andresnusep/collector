@@ -134,6 +134,32 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     setSavedSets(ss => ss.map(s => s.id === id ? { ...s, is_public: !!isPublic } : s));
   };
 
+  // Toggle a single track in a specific saved set. Used by the per-track
+  // add menu in the album detail drawer.
+  const toggleTrackInSavedSet = (setId, recordId, trackIndex) => {
+    const tid = `${recordId}-${trackIndex}`;
+    setSavedSets(ss => ss.map(s => {
+      if (s.id !== setId) return s;
+      const has = (s.trackIds || []).includes(tid);
+      return { ...s, trackIds: has
+        ? s.trackIds.filter(x => x !== tid)
+        : [...(s.trackIds || []), tid] };
+    }));
+  };
+
+  // Create a new saved set seeded with a single track. Used by "+ New set"
+  // in the per-track add menu so DJs can spin up a set without leaving the
+  // album view.
+  const createSetWithTrack = (name, recordId, trackIndex) => {
+    const tid = `${recordId}-${trackIndex}`;
+    const finalName = (name || '').trim() || `Set ${new Date().toLocaleDateString()}`;
+    const id = `s${Date.now()}`;
+    setSavedSets(ss => [...ss, {
+      id, name: finalName, trackIds: [tid], createdAt: Date.now(),
+    }]);
+    return id;
+  };
+
   // Gig CRUD — operate on the new top-level gigs state. Phase 1's migration
   // already lifted nested saved_sets.gigs[] into here; from now on this is
   // the source of truth for the calendar.
@@ -902,6 +928,9 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               onEdit={() => openEditRecord(selected)}
               crates={crates} onAddToCrate={addToCrate} onRemoveFromCrate={removeFromCrate}
               onNewCrate={newCrate}
+              savedSets={savedSets}
+              onToggleTrackInSavedSet={toggleTrackInSavedSet}
+              onCreateSetWithTrack={createSetWithTrack}
               onRateTrack={rateTrack}
               onRefreshTrackBpm={refreshTrackBpm}
               onRefreshDiscogs={refreshDiscogsRecord}
