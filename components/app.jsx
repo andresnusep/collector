@@ -782,6 +782,8 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           onClearSet={() => setSet([])}
           onLoadSavedSet={(id) => { const s = savedSets.find(x => x.id === id); if (s) { setSet(s.trackIds); setActiveSetId(id); setCurrentSetName(s.name); } }}
           onAddGig={addGig} onUpdateGig={updateGig} onDeleteGig={deleteGig}
+          onToggleTrackInSavedSet={toggleTrackInSavedSet}
+          onCreateSetWithTrack={createSetWithTrack}
           profile={profile} setProfile={setProfile}
           user={user} onSignOut={onSignOut}
           darkMode={tweaks.theme === 'dark'} accent={ACCENTS[tweaks.accent] || tweaks.accent} />

@@ -872,4 +872,4 @@ function NavArrowBtn({ onClick, disabled, title, direction }) {
   );
 }
 
-Object.assign(window, { RecordDetail });
+Object.assign(window, { RecordDetail, TrackAddMenu });

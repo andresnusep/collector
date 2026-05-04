@@ -2,6 +2,7 @@
 
 function MobileApp({ records, set, crates, savedSets, gigs, currentSetName, setCurrentSetName,
                      onSaveSet, onToggleTrack, onRemoveFromSet, onReorderSet, onClearSet, onLoadSavedSet,
+                     onToggleTrackInSavedSet, onCreateSetWithTrack,
                      onAddGig, onUpdateGig, onDeleteGig,
                      profile, setProfile, user, onSignOut,
                      darkMode, accent }) {
@@ -146,12 +147,18 @@ function MobileApp({ records, set, crates, savedSets, gigs, currentSetName, setC
         <MobileCrates crates={crates || []} records={records}
           openCrateId={openCrateId} setOpenCrateId={setOpenCrateId}
           accent={accent} fg={fg} soft={soft} border={border}
-          setTrackIds={new Set(set)} onToggleTrack={onToggleTrack} />
+          setTrackIds={new Set(set)} onToggleTrack={onToggleTrack}
+          savedSets={savedSets || []}
+          onToggleTrackInSavedSet={onToggleTrackInSavedSet}
+          onCreateSetWithTrack={onCreateSetWithTrack} />
       )}
       {tab === 'lib' && (
         <MobileLibrary records={records} search={libSearch} setSearch={setLibSearch}
           accent={accent} fg={fg} soft={soft} border={border}
-          setTrackIds={new Set(set)} onToggleTrack={onToggleTrack} />
+          setTrackIds={new Set(set)} onToggleTrack={onToggleTrack}
+          savedSets={savedSets || []}
+          onToggleTrackInSavedSet={onToggleTrackInSavedSet}
+          onCreateSetWithTrack={onCreateSetWithTrack} />
       )}
       {tab === 'calendar' && (
         <MobileCalendar gigs={gigs || []} savedSets={savedSets || []}
@@ -934,7 +941,8 @@ function MobileSetDetail({ savedSet, records, onBack, onLoadSavedSet,
 // ─────────── Crates explorer ───────────
 
 function MobileCrates({ crates, records, openCrateId, setOpenCrateId, accent, fg, soft, border,
-                        setTrackIds, onToggleTrack }) {
+                        setTrackIds, onToggleTrack,
+                        savedSets, onToggleTrackInSavedSet, onCreateSetWithTrack }) {
   const [crateSearch, setCrateSearch] = React.useState('');
   const [crateSort, setCrateSort] = React.useState('recent');
   const [insideSearch, setInsideSearch] = React.useState('');
@@ -982,7 +990,10 @@ function MobileCrates({ crates, records, openCrateId, setOpenCrateId, accent, fg
           fg={fg} soft={soft} border={border} />
 
         <MobileRecordGrid records={filtered} accent={accent} fg={fg} border={border}
-          setTrackIds={setTrackIds} onToggleTrack={onToggleTrack} />
+          setTrackIds={setTrackIds} onToggleTrack={onToggleTrack}
+          savedSets={savedSets}
+          onToggleTrackInSavedSet={onToggleTrackInSavedSet}
+          onCreateSetWithTrack={onCreateSetWithTrack} />
       </div>
     );
   }
@@ -1080,7 +1091,8 @@ function MobileCrates({ crates, records, openCrateId, setOpenCrateId, accent, fg
 // ─────────── Library (all records) ───────────
 
 function MobileLibrary({ records, search, setSearch, accent, fg, soft, border,
-                         setTrackIds, onToggleTrack }) {
+                         setTrackIds, onToggleTrack,
+                         savedSets, onToggleTrackInSavedSet, onCreateSetWithTrack }) {
   const [sortBy, setSortBy] = React.useState('recent');
   const [genre, setGenre] = React.useState('All');
   const availableGenres = React.useMemo(
@@ -1107,13 +1119,21 @@ function MobileLibrary({ records, search, setSearch, accent, fg, soft, border,
         fg={fg} soft={soft} border={border} />
 
       <MobileRecordGrid records={filtered} accent={accent} fg={fg} border={border}
-        setTrackIds={setTrackIds} onToggleTrack={onToggleTrack} />
+        setTrackIds={setTrackIds} onToggleTrack={onToggleTrack}
+        savedSets={savedSets}
+        onToggleTrackInSavedSet={onToggleTrackInSavedSet}
+        onCreateSetWithTrack={onCreateSetWithTrack} />
     </div>
   );
 }
 
-function MobileRecordGrid({ records, accent, fg, border, setTrackIds, onToggleTrack }) {
+function MobileRecordGrid({ records, accent, fg, border, setTrackIds, onToggleTrack,
+                            savedSets = [],
+                            onToggleTrackInSavedSet, onCreateSetWithTrack }) {
   const [expanded, setExpanded] = React.useState(null);
+  // Per-track add menu — { record, trackIndex } | null. Reuses the desktop
+  // TrackAddMenu modal exposed on window so we don't double the UI logic.
+  const [addMenu, setAddMenu] = React.useState(null);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 20 }}>
       {records.map(r => {
@@ -1191,7 +1211,8 @@ function MobileRecordGrid({ records, accent, fg, border, setTrackIds, onToggleTr
                           fontSize: 9, opacity: 0.6 }}>{t.key ?? '—'}</div>
                       </div>
                       {onToggleTrack && (
-                        <button onClick={() => onToggleTrack(r, i)}
+                        <button onClick={() => setAddMenu({ record: r, trackIndex: i })}
+                          title="Add to a set"
                           style={{
                             width: 26, height: 26, borderRadius: 13,
                             border: inSet ? 'none' : `1px solid ${border}`,
@@ -1210,6 +1231,18 @@ function MobileRecordGrid({ records, accent, fg, border, setTrackIds, onToggleTr
           </div>
         );
       })}
+      {addMenu && window.TrackAddMenu && (
+        <window.TrackAddMenu
+          record={addMenu.record} trackIndex={addMenu.trackIndex}
+          isInBuilder={setTrackIds && setTrackIds.has(`${addMenu.record.id}-${addMenu.trackIndex}`)}
+          savedSets={savedSets}
+          onToggleBuilder={() => onToggleTrack && onToggleTrack(addMenu.record, addMenu.trackIndex)}
+          onToggleInSavedSet={(setId) =>
+            onToggleTrackInSavedSet && onToggleTrackInSavedSet(setId, addMenu.record.id, addMenu.trackIndex)}
+          onCreateSetWithTrack={(name) =>
+            onCreateSetWithTrack && onCreateSetWithTrack(name, addMenu.record.id, addMenu.trackIndex)}
+          onClose={() => setAddMenu(null)} />
+      )}
     </div>
   );
 }
