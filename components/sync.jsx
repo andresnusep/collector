@@ -5,7 +5,17 @@
 const sb = () => window.supabaseClient;
 
 async function fetchAll(table) {
-  const { data, error } = await sb().from(table).select('id, data');
+  // Explicitly filter by user_id even though RLS would normally enforce it.
+  // The public-readable policies (saved_sets is_public, profiles is_discoverable,
+  // gigs is_public) added for the social feature mean RLS now lets a viewer
+  // read OTHER users' rows too. Hydration must only pull the viewer's own
+  // data — without this filter, a brand-new user would inherit any
+  // discoverable/public data from across the app on first sign-in.
+  const { data: auth } = await sb().auth.getUser();
+  const user_id = auth?.user?.id;
+  if (!user_id) return [];
+  const { data, error } = await sb().from(table)
+    .select('id, data').eq('user_id', user_id);
   if (error) { console.warn(`[${table}] fetch`, error); return []; }
   return (data || []).map(row => row.data);
 }
@@ -34,7 +44,14 @@ async function upsertSingleton(table, data) {
 }
 
 async function fetchSingleton(table) {
-  const { data, error } = await sb().from(table).select('data').maybeSingle();
+  // Same reasoning as fetchAll — explicit user_id filter so RLS's
+  // public-read policies don't bleed another user's profile/workspace
+  // into a newly-signed-in viewer's state.
+  const { data: auth } = await sb().auth.getUser();
+  const user_id = auth?.user?.id;
+  if (!user_id) return null;
+  const { data, error } = await sb().from(table)
+    .select('data').eq('user_id', user_id).maybeSingle();
   if (error) { console.warn(`[${table}] fetch singleton`, error); return null; }
   return data?.data ?? null;
 }
