@@ -386,13 +386,22 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
           style={{ width: 120, height: 120, borderRadius: 6,
             boxShadow: '0 12px 28px rgba(0,0,0,0.35)', flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          {t.n && (
+          {(t.n || (window.EnergyMeter && t.energy >= 1 && t.energy <= 5)) && (
             <div style={{
-              display: 'inline-block',
-              fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
-              letterSpacing: 1.2, padding: '2px 7px', borderRadius: 4,
-              background: accent, color: '#0E0C0A', marginBottom: 5,
-            }}>{t.n}</div>
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5,
+              flexWrap: 'wrap',
+            }}>
+              {t.n && (
+                <span style={{
+                  fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+                  letterSpacing: 1.2, padding: '2px 7px', borderRadius: 4,
+                  background: accent, color: '#0E0C0A',
+                }}>{t.n}</span>
+              )}
+              {window.EnergyMeter && t.energy >= 1 && t.energy <= 5 && (
+                <window.EnergyMeter value={t.energy} size={8} />
+              )}
+            </div>
           )}
           <div style={{
             fontSize: 17, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.15,

@@ -884,8 +884,14 @@ function NavArrowBtn({ onClick, disabled, title, direction }) {
 // 4–5 peak (red). Click a circle to set; click the active one to clear.
 // Treats any value outside 1–5 as "not set" so legacy data from the older
 // 1–10 energy scale shows up as an empty meter instead of a wrong reading.
+// When onChange is omitted, renders read-only (no buttons, smaller dots, no
+// hollow placeholders when energy is unset — keeps lists clean).
 function EnergyMeter({ value, onChange, size = 10 }) {
   const v = (value >= 1 && value <= 5) ? Math.round(value) : 0;
+  const interactive = !!onChange;
+  // Read-only mode with no energy → don't render at all so list rows
+  // without a value don't get 5 empty placeholder dots.
+  if (!interactive && v === 0) return null;
   const colorFor = (n) => n <= 2 ? '#54C964'  // green (chill)
     : n === 3 ? '#F2C744'                       // amber (mid)
     : '#E74C5C';                                // red (peak)
@@ -894,18 +900,21 @@ function EnergyMeter({ value, onChange, size = 10 }) {
       title={v ? `Energy ${v}/5` : 'Set energy'}>
       {[1, 2, 3, 4, 5].map(n => {
         const active = n <= v;
+        const common = {
+          width: size, height: size, borderRadius: '50%',
+          padding: 0,
+          background: active ? colorFor(v) : 'transparent',
+          border: active ? 'none' : '1px solid var(--border)',
+          transition: 'background 0.12s, border-color 0.12s',
+        };
+        if (!interactive) {
+          return <span key={n} style={common} />;
+        }
         return (
           <button key={n}
             onClick={(e) => { e.stopPropagation(); onChange(v === n ? 0 : n); }}
             title={`Energy ${n}`}
-            style={{
-              width: size, height: size, borderRadius: '50%',
-              padding: 0,
-              background: active ? colorFor(v) : 'transparent',
-              border: active ? 'none' : '1px solid var(--border)',
-              cursor: 'pointer',
-              transition: 'background 0.12s, border-color 0.12s',
-            }} />
+            style={{ ...common, cursor: 'pointer' }} />
         );
       })}
     </div>

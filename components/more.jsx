@@ -442,11 +442,21 @@ function GigMode({ resolved, theme, accent, onClose }) {
           <div style={{ fontSize: 28, color: 'var(--dim)', marginBottom: 32 }}>
             {cur.record.artist}
           </div>
-          <div style={{ display: 'flex', gap: 32, marginBottom: 32 }}>
+          <div style={{ display: 'flex', gap: 32, alignItems: 'flex-end',
+            marginBottom: 32, flexWrap: 'wrap' }}>
             <GigStat label="BPM" value={cur.track.bpm ?? '—'} accentColor={accentColor} />
             <GigStat label="Key" value={cur.track.key ?? '—'} accentColor={accentColor} />
             <GigStat label="Length" value={cur.track.len} accentColor={accentColor} />
             <GigStat label="Elapsed" value={fmtTime(elapsed)} accentColor={accentColor} highlighted={running} />
+            {window.EnergyMeter && cur.track.energy >= 1 && cur.track.energy <= 5 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{
+                  fontFamily: 'JetBrains Mono, monospace', fontSize: 11, letterSpacing: 2,
+                  textTransform: 'uppercase', color: 'var(--dim)',
+                }}>Energy</div>
+                <window.EnergyMeter value={cur.track.energy} size={14} />
+              </div>
+            )}
           </div>
           {/* Progress bar */}
           <div style={{

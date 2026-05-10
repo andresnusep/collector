@@ -488,13 +488,18 @@ function TrackRow({ resolved, index, onRemove, onMoveUp, onMoveDown, bpmDelta, k
             {track.n} · {record.artist} · {record.title}
           </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-          <div style={{ display: 'flex', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <BpmBadge bpm={track.bpm} size={10} />
             <KeyBadge k={track.key} size={9} />
           </div>
-          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'var(--dim)' }}>
-            {track.len}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            {window.EnergyMeter && (
+              <window.EnergyMeter value={track.energy} size={7} />
+            )}
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 9, color: 'var(--dim)' }}>
+              {track.len}
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
