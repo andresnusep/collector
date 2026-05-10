@@ -987,16 +987,33 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
         {selected && (() => {
           // Walk the currently-visible list so prev/next mirror what the user
           // sees in the grid:
-          //   • Inside a crate → walk that crate's records only.
-          //   • In the collection view → walk the filtered + sorted list.
-          //   • Anything else (search hit that the filter would exclude, etc.)
-          //     → fall back to the unfiltered records.
+          //   • Inside a crate → walk the same filtered + sorted slice that
+          //     CratesPage renders, so prev/next respects the active search
+          //     box, advanced filters, and sort selection.
+          //   • In the collection view → walk sortedFiltered.
+          //   • Anything else → fall back to the unfiltered records.
           let visible;
           if (view === 'crates' && activeCrateId) {
             const crate = crates.find(c => c.id === activeCrateId);
-            const crateRecs = crate
+            let crateRecs = crate
               ? crate.recordIds.map(id => records.find(r => r.id === id)).filter(Boolean)
               : [];
+            if (crateRecs.length && window.applyFilters) {
+              crateRecs = window.applyFilters(crateRecs, {
+                search: search || '',
+                genre: 'All',
+                key: advFilters?.key || 'All',
+                bpmMin: advFilters?.bpmMin ?? null,
+                bpmMax: advFilters?.bpmMax ?? null,
+                yearMin: advFilters?.yearMin ?? null,
+                yearMax: advFilters?.yearMax ?? null,
+                onlyInSet: advFilters?.onlyInSet ?? false,
+                set: set || [],
+              });
+            }
+            if (crateRecs.length && window.sortRecords) {
+              crateRecs = window.sortRecords(crateRecs, sortBy);
+            }
             visible = crateRecs.some(r => r.id === selected.id) ? crateRecs : records;
           } else if (sortedFiltered.some(r => r.id === selected.id)) {
             visible = sortedFiltered;
