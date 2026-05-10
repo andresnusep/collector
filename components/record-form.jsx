@@ -7,10 +7,10 @@ function RecordFormModal({ open, initial, onClose, onSave, onDelete }) {
     id: `m${Date.now()}`, source: 'manual',
     artist: '', title: '', year: new Date().getFullYear(),
     label: '', catalog: '',
-    genre: '', mood: '', energy: 5,
+    genre: '', mood: '', energy: null,
     bpm: null, key: '', value: 0, notes: '',
     cover: { hue: Math.floor(Math.random() * 360), shape: 'stripes', image: null },
-    tracks: [{ n: 'A1', title: '', bpm: null, key: '', len: '0:00', mood: '', energy: 5 }],
+    tracks: [{ n: 'A1', title: '', bpm: null, key: '', len: '0:00', mood: '', energy: null }],
   });
   const [draft, setDraft] = React.useState(blank);
 
@@ -31,7 +31,7 @@ function RecordFormModal({ open, initial, onClose, onSave, onDelete }) {
     const side = d.tracks.length < 6 ? 'A' : 'B';
     const pos = d.tracks.filter(t => t.n?.startsWith(side)).length + 1;
     return { ...d, tracks: [...d.tracks, {
-      n: `${side}${pos}`, title: '', bpm: null, key: '', len: '0:00', mood: '', energy: 5,
+      n: `${side}${pos}`, title: '', bpm: null, key: '', len: '0:00', mood: '', energy: null,
     }] };
   });
   const removeTrack = (i) => setDraft(d => ({ ...d, tracks: d.tracks.filter((_, j) => j !== i) }));
@@ -43,12 +43,12 @@ function RecordFormModal({ open, initial, onClose, onSave, onDelete }) {
       bpm: draft.bpm === '' || draft.bpm == null ? null : Number(draft.bpm),
       year: draft.year ? Number(draft.year) : null,
       value: Number(draft.value) || 0,
-      energy: Number(draft.energy) || 5,
+      energy: draft.energy === '' || draft.energy == null ? null : Number(draft.energy),
       rpm: Number(draft.rpm) || 33,
       tracks: draft.tracks.map(t => ({
         ...t,
         bpm: t.bpm === '' || t.bpm == null ? null : Number(t.bpm),
-        energy: Number(t.energy) || 5,
+        energy: t.energy === '' || t.energy == null ? null : Number(t.energy),
       })),
     };
     onSave(clean);

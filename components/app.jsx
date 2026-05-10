@@ -448,8 +448,27 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
         profileAfterMigration = { ...baseProfile, gigsMigratedAt: Date.now() };
       }
 
+      // One-time energy reset. Discogs import used to seed every track with
+      // energy: 5 which made the new EnergyMeter render as all-red for every
+      // album. Wipe all track.energy values once per user so the meter
+      // starts blank and lets the DJ rate fresh on the 1–5 scale.
+      let recordsAfterEnergyReset = cleanedRecords;
+      if (!profileAfterMigration.energyResetAt) {
+        recordsAfterEnergyReset = cleanedRecords.map(r => ({
+          ...r,
+          tracks: (r.tracks || []).map(t => {
+            if (t.energy == null) return t;
+            const { energy, ...rest } = t;
+            return rest;
+          }),
+        }));
+        profileAfterMigration = {
+          ...profileAfterMigration, energyResetAt: Date.now(),
+        };
+      }
+
       setProfile(profileAfterMigration);
-      setRecords(cleanedRecords);
+      setRecords(recordsAfterEnergyReset);
       setSavedSets(cleanedSets);
       setCrates(cleanedCrates);
       setGigs(gigsAfterMigration);

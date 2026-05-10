@@ -275,7 +275,7 @@ function parseDiscogsTracklist(full, rec) {
       title: t.title || 'Untitled',
       bpm: null, key: null,
       len: t.duration || '0:00',
-      mood: '', energy: 5,
+      mood: '', energy: null,
     }));
 }
 
@@ -319,14 +319,15 @@ function mapDiscogsRelease(rel) {
     title: info.title || 'Untitled',
     year: info.year || null,
     label, catalog,
-    genre, mood: '', energy: 5,
+    genre, mood: '', energy: null,
     bpm: null, key: null, rpm,
     cover: { hue, shape, image: coverImage },
     notes: '',
     value: 0,
     tracks: [{
       n: 'A1', title: info.title || 'Untitled',
-      bpm: null, key: null, len: '0:00', mood: '', energy: 5,
+      bpm: null, key: null, len: '0:00', mood: '',
+      energy: null,
     }],
   };
 }
@@ -378,7 +379,7 @@ function mergeDiscogsIntoRecord(full, existing) {
         bpm: prev.bpm ?? null,
         key: prev.key || '',
         mood: prev.mood || '',
-        energy: prev.energy ?? 5,
+        energy: prev.energy ?? null,
         rating: prev.rating ?? null,
         bpmTried: false, // re-try auto BPM lookup since title may have changed
       };
