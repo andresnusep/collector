@@ -1,6 +1,6 @@
 // Set Builder — track-based, with rich web-app data
 
-function SetBuilder({ set, records, onRemove, onReorder, onClear, onSwipe, swipeIndex, setSwipeIndex, onAddTrack, onSaveSet, activeSetName, setName, onSetNameChange, onLaunchGig, timelineView, onToggleTimeline }) {
+function SetBuilder({ set, records, crates = [], onRemove, onReorder, onClear, onSwipe, swipeIndex, setSwipeIndex, onAddTrack, onSaveSet, activeSetName, setName, onSetNameChange, onLaunchGig, timelineView, onToggleTimeline }) {
   // set = array of track IDs like "r01-2"
   const resolved = set.map(tid => {
     const parsed = window.parseTrackId(tid);
@@ -12,7 +12,22 @@ function SetBuilder({ set, records, onRemove, onReorder, onClear, onSwipe, swipe
     return sum + m + s / 60;
   }, 0);
 
-  const current = records[swipeIndex % records.length];
+  // Scope the swipe-deck pool to a single crate when the DJ wants to dig in
+  // a curated subset instead of the whole collection. "all" = full library.
+  const [filterCrateId, setFilterCrateId] = React.useState('all');
+  const filteredRecords = React.useMemo(() => {
+    if (filterCrateId === 'all') return records;
+    const crate = crates.find(c => c.id === filterCrateId);
+    if (!crate || crate.recordIds.length === 0) return records;
+    const idSet = new Set(crate.recordIds);
+    return records.filter(r => idSet.has(r.id));
+  }, [records, crates, filterCrateId]);
+  // Reset the swipe cursor whenever the pool shrinks/grows so we never
+  // get stuck on an out-of-range index.
+  React.useEffect(() => { setSwipeIndex(0); }, [filterCrateId]);
+  const deckRecords = filteredRecords.length > 0 ? filteredRecords : records;
+
+  const current = deckRecords[swipeIndex % deckRecords.length];
   const currentInSet = current ? current.tracks.some((_, i) =>
     set.includes(`${current.id}-${i}`)) : false;
 
@@ -29,8 +44,8 @@ function SetBuilder({ set, records, onRemove, onReorder, onClear, onSwipe, swipe
   const onUp = () => {
     if (!dragging) return;
     setDragging(false);
-    if (drag > 100) { onSwipe(current, 'right'); setSwipeIndex(i => (i + 1) % records.length); }
-    else if (drag < -100) setSwipeIndex(i => (i + 1) % records.length);
+    if (drag > 100) { onSwipe(current, 'right'); setSwipeIndex(i => (i + 1) % deckRecords.length); }
+    else if (drag < -100) setSwipeIndex(i => (i + 1) % deckRecords.length);
     setDrag(0);
   };
 
@@ -60,12 +75,42 @@ function SetBuilder({ set, records, onRemove, onReorder, onClear, onSwipe, swipe
       {/* Left: swipe deck */}
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         <div style={{
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
-          textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 14,
-          display: 'flex', alignItems: 'center', gap: 8,
+          marginBottom: 14,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 10, flexWrap: 'wrap',
         }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />
-          Crate discovery
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
+            textTransform: 'uppercase', color: 'var(--dim)',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />
+            Crate discovery
+            <span style={{ color: 'var(--fg)' }}>
+              · {deckRecords.length} record{deckRecords.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          {crates.length > 0 && (
+            <select value={filterCrateId}
+              onChange={e => setFilterCrateId(e.target.value)}
+              title="Limit the discovery pool to a crate"
+              style={{
+                padding: '5px 8px', borderRadius: 6,
+                background: 'var(--hover)', color: 'var(--fg)',
+                border: '1px solid ' + (filterCrateId === 'all' ? 'var(--border)' : 'var(--accent)'),
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+                letterSpacing: 0.5, textTransform: 'uppercase', fontWeight: 700,
+                outline: 'none', cursor: 'pointer',
+                maxWidth: 180, textOverflow: 'ellipsis',
+              }}>
+              <option value="all">All records</option>
+              {crates.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.recordIds.length})
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div style={{
@@ -73,7 +118,7 @@ function SetBuilder({ set, records, onRemove, onReorder, onClear, onSwipe, swipe
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           {[2, 1, 0].map(depth => {
-            const rec = records[(swipeIndex + depth) % records.length];
+            const rec = deckRecords[(swipeIndex + depth) % deckRecords.length];
             if (!rec) return null;
             const isTop = depth === 0;
             return (
@@ -108,8 +153,8 @@ function SetBuilder({ set, records, onRemove, onReorder, onClear, onSwipe, swipe
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginTop: 16 }}>
-          <SwipeBtn dir="left" onClick={() => setSwipeIndex(i => (i + 1) % records.length)}>Skip</SwipeBtn>
-          <SwipeBtn dir="right" onClick={() => { onSwipe(current, 'right'); setSwipeIndex(i => (i + 1) % records.length); }}
+          <SwipeBtn dir="left" onClick={() => setSwipeIndex(i => (i + 1) % deckRecords.length)}>Skip</SwipeBtn>
+          <SwipeBtn dir="right" onClick={() => { onSwipe(current, 'right'); setSwipeIndex(i => (i + 1) % deckRecords.length); }}
             primary>Open & pick</SwipeBtn>
         </div>
         <div style={{

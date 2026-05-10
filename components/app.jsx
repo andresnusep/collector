@@ -907,7 +907,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
             )
           )}
           {view === 'set' && (
-            <SetBuilder set={set} records={records}
+            <SetBuilder set={set} records={records} crates={crates}
               onRemove={removeFromSet} onReorder={reorder}
               onClear={() => setSet([])}
               onSwipe={openRecord}
