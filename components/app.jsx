@@ -920,7 +920,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               swipeIndex={swipeIndex} setSwipeIndex={setSwipeIndex} />
           )}
           {view === 'dashboard' && (
-            <Dashboard records={records} set={set} />
+            <Dashboard records={records} set={set} savedSets={savedSets} gigs={gigs} />
           )}
           {view === 'calendar' && (
             <CalendarView gigs={gigs} savedSets={savedSets}

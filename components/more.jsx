@@ -126,17 +126,26 @@ function SetTimeline({ resolved }) {
 
 // ─────────── Collection health dashboard ───────────
 
-function Dashboard({ records, set }) {
+function Dashboard({ records, set, savedSets = [], gigs = [] }) {
   const total = records.length;
   const allTracks = records.flatMap(r => r.tracks);
   const totalTracks = allTracks.length;
   const withBpm = allTracks.filter(t => t.bpm != null).length;
   const withKey = allTracks.filter(t => t.key).length;
-  const withAudio = records.filter(r => {
-    // we can't await here, so check via window.AudioStore cache — best-effort
-    return false;
-  }).length;
-  const neverInSet = records.filter(r => !r.tracks.some((_, i) => set.includes(`${r.id}-${i}`))).length;
+
+  // "Never in a set" should consider every saved set + the live builder
+  // (a record counts as "played" once any of its tracks lands anywhere).
+  // Previous version only checked the builder, so every record showed up
+  // as "never in a set" even when there were saved sets full of them.
+  const allTrackIds = React.useMemo(() => {
+    const acc = new Set(set || []);
+    for (const s of savedSets) {
+      for (const tid of (s.trackIds || [])) acc.add(tid);
+    }
+    return acc;
+  }, [set, savedSets]);
+  const neverInSet = records.filter(r =>
+    !r.tracks.some((_, i) => allTrackIds.has(`${r.id}-${i}`))).length;
 
   const genreCounts = {};
   for (const r of records) genreCounts[r.genre || 'Unknown'] = (genreCounts[r.genre || 'Unknown'] || 0) + 1;
@@ -152,8 +161,13 @@ function Dashboard({ records, set }) {
   const bpms = allTracks.map(t => t.bpm).filter(b => b != null);
   const avgBpm = bpms.length ? Math.round(bpms.reduce((a, b) => a + b, 0) / bpms.length) : 0;
 
-  const rated = allTracks.filter(t => t.rating && t.rating > 0).length;
-  const avgRating = rated ? (allTracks.reduce((s, t) => s + (t.rating || 0), 0) / rated).toFixed(1) : 0;
+  // Album-level rating (moved from per-track when the detail view redesign
+  // pulled stars out of the tracklist and put them under the artist name).
+  const ratedRecords = records.filter(r => r.rating && r.rating > 0);
+  const rated = ratedRecords.length;
+  const avgRating = ratedRecords.length
+    ? (ratedRecords.reduce((s, r) => s + (r.rating || 0), 0) / ratedRecords.length).toFixed(1)
+    : 0;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -230,11 +244,11 @@ function Dashboard({ records, set }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <div>
             <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace' }}>
-              {rated}<span style={{ fontSize: 16, color: 'var(--dim)' }}> / {totalTracks}</span>
+              {rated}<span style={{ fontSize: 16, color: 'var(--dim)' }}> / {total}</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--dim)',
               fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-              Tracks rated</div>
+              Records rated</div>
           </div>
           <div>
             <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
