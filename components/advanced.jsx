@@ -909,11 +909,13 @@ function CrateViewToggle({ value, onChange }) {
 
 function CrateRow({ crate, records, onOpen, onDelete }) {
   const items = crate.recordIds.map(id => records.find(r => r.id === id)).filter(Boolean);
-  const previews = items.slice(0, 4);
+  // Cap at 3 previews so the stacked thumbs fit a fixed-width slot without
+  // bleeding into the title column (overlap offset 14, cover 44 → 72 max).
+  const previews = items.slice(0, 3);
   return (
     <div onClick={onOpen} style={{
-      display: 'flex', alignItems: 'center', gap: 14,
-      padding: '10px 14px', borderRadius: 10,
+      display: 'flex', alignItems: 'center', gap: 22,
+      padding: '10px 16px', borderRadius: 10,
       background: 'var(--panel)', border: '1px solid var(--border)',
       cursor: 'pointer', transition: 'border-color 0.15s, transform 0.15s',
     }}
