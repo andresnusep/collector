@@ -824,6 +824,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           sortBy={sortBy} setSortBy={setSortBy}
           activeCrateName={view === 'crates' && activeCrateId
             ? crates.find(c => c.id === activeCrateId)?.name : null}
+          viewingSetId={viewingSetId} savedSetCount={savedSets.length}
           density={tweaks.density} setDensity={d => setTweaks({ ...tweaks, density: d })} />
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px 80px' }}>
@@ -1262,7 +1263,7 @@ function SortDropdown({ sortBy, setSortBy }) {
   );
 }
 
-function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter, setGenreFilter, availableGenres, advFilters, setAdvFilters, records, count, total, sortBy, setSortBy, activeCrateName, density, setDensity }) {
+function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter, setGenreFilter, availableGenres, advFilters, setAdvFilters, records, count, total, sortBy, setSortBy, activeCrateName, viewingSetId, savedSetCount, density, setDensity }) {
   const showToolbar = view === 'collection' || (view === 'crates' && activeCrateName);
   return (
     <div style={{
@@ -1302,7 +1303,7 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
           {view === 'collection' && <>Showing <span style={{ color: 'var(--fg)', fontWeight: 700 }}>{count}</span> / {total}</>}
           {view === 'crates' && <>Organize records into named groups</>}
           {view === 'set' && <>Swipe right to add · swipe left to skip</>}
-          {view === 'sets' && (viewingSetId ? <>Tap the back arrow to see all sets</> : <>{savedSets.length} saved · click to open</>)}
+          {view === 'sets' && (viewingSetId ? <>Tap the back arrow to see all sets</> : <>{savedSetCount} saved · click to open</>)}
           {view === 'calendar' && <>Upcoming gigs and past sets</>}
           {view === 'dashboard' && <>Everything at a glance</>}
         </div>
