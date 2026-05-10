@@ -5,21 +5,34 @@
 function TrackRating({ value, onChange, size = 12 }) {
   const [hover, setHover] = React.useState(0);
   const active = hover || value || 0;
+  // Solid gold reads on cream, dark, and warm themes alike — using the
+  // accent (lime-yellow) washed out against light backgrounds. Slightly
+  // wider gap so the stars don't run together.
+  const STAR_ON = '#F5B400';
   return (
-    <div style={{ display: 'inline-flex', gap: 1 }}
+    <div style={{ display: 'inline-flex', gap: 2 }}
       onMouseLeave={() => setHover(0)}>
-      {[1, 2, 3, 4, 5].map(n => (
-        <button key={n}
-          onClick={(e) => { e.stopPropagation(); onChange(value === n ? 0 : n); }}
-          onMouseEnter={() => setHover(n)}
-          title={`${n} star${n === 1 ? '' : 's'}`}
-          style={{
-            width: size + 4, height: size + 4, padding: 0,
-            background: 'transparent', border: 'none', cursor: 'pointer',
-            color: n <= active ? 'var(--accent)' : 'var(--dim)',
-            fontSize: size, lineHeight: 1, opacity: n <= active ? 1 : 0.35,
-          }}>★</button>
-      ))}
+      {[1, 2, 3, 4, 5].map(n => {
+        const isOn = n <= active;
+        return (
+          <button key={n}
+            onClick={(e) => { e.stopPropagation(); onChange(value === n ? 0 : n); }}
+            onMouseEnter={() => setHover(n)}
+            title={`${n} star${n === 1 ? '' : 's'}`}
+            style={{
+              width: size + 4, height: size + 4, padding: 0,
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: isOn ? STAR_ON : 'var(--dim)',
+              fontSize: size, lineHeight: 1,
+              opacity: isOn ? 1 : 0.4,
+              textShadow: isOn ? '0 1px 0 rgba(0,0,0,0.15)' : 'none',
+              outline: 'none',
+            }}
+            onFocus={(e) => { e.currentTarget.style.outline = 'none'; }}>
+            {isOn ? '★' : '☆'}
+          </button>
+        );
+      })}
     </div>
   );
 }
