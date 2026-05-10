@@ -82,7 +82,15 @@ function DiscogsImportModal({ open, onClose, onImport, existingRecords }) {
         <p style={{ fontSize: 13, color: 'var(--dim)', lineHeight: 1.5, margin: '0 0 18px' }}>
           Pulls your public collection from Discogs. Generate a personal access token at{' '}
           <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer"
-            style={{ color: 'var(--accent)' }}>discogs.com/settings/developers</a>. Stored only in your browser.
+            style={{
+              display: 'inline-block',
+              padding: '1px 8px', borderRadius: 999,
+              background: 'var(--accent)', color: 'var(--on-accent)',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 11,
+              fontWeight: 700, letterSpacing: 0.3,
+              textDecoration: 'none', whiteSpace: 'nowrap',
+              verticalAlign: 'baseline',
+            }}>discogs.com/settings/developers ↗</a>. Stored only in your browser.
         </p>
 
         <Field label="Discogs username">
