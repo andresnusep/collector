@@ -115,6 +115,7 @@ function MobileApp({ records, set, crates, savedSets, gigs, currentSetName, setC
           onPrev={() => setNowIdx(i => (i - 1 + queue.length) % queue.length)}
           savedSets={savedSets || []} selectedSetId={selectedSetId}
           setSelectedSetId={setSelectedSetId} activeSetLabel={activeSetLabel}
+          records={records} setTrackIds={set} onAddTrack={onToggleTrack}
           accent={accent} fg={fg} bg={bg} soft={soft} border={border} />
       )}
       {tab === 'set' && setPage === 'hub' && (
@@ -284,6 +285,7 @@ function PickerRow({ label, sublabel, selected, accent, onClick }) {
 
 function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNext, onPrev,
                     savedSets, selectedSetId, setSelectedSetId, activeSetLabel,
+                    records = [], setTrackIds = [], onAddTrack,
                     accent, fg, bg, soft, border }) {
   // iTunes preview playback — shared <audio> element, one-track-at-a-time.
   const audioRef = React.useRef(null);
@@ -323,26 +325,42 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
   React.useEffect(() => { stop(); }, [current && current.tid, stop]);
   React.useEffect(() => () => stop(), [stop]);
 
-  // ── Mix suggestions: pick the best next tracks FROM THIS SET only ──
-  // Primary weight: BPM closeness (user preference). Tiebreaker: Camelot key.
-  // Kept above the `if (!current) return null` guard so hook order stays stable
-  // across renders (Rules of Hooks) — the memo body tolerates a null current.
+  // ── Mix suggestions: best BPM/key matches FROM RECORDS NOT IN THE SET
+  // so the DJ can dig fresh tracks live and add them to the set on the
+  // fly via the + button. Falls back to in-set picks when no records
+  // collection is passed (preserves the older behavior for safety).
+  // Above the early return so hook order stays stable.
   const curBpm = current && current.track ? current.track.bpm : null;
   const curKey = current && current.track ? current.track.key : null;
+  const fromCollection = records && records.length > 0;
   const suggestions = React.useMemo(() => {
-    if (!current || !queue || queue.length < 2 || curBpm == null) return [];
-    const pool = queue
-      .map((q, i) => ({ ...q, qIdx: i }))
-      .filter((q, i) => i !== position && q.track.bpm != null);
+    if (!current || curBpm == null) return [];
+    const cd = window.camelotDistance || (() => 3);
+    let pool = [];
+    if (fromCollection) {
+      const setIdSet = new Set(setTrackIds || []);
+      for (const rec of records) {
+        for (let i = 0; i < (rec.tracks || []).length; i++) {
+          const tid = `${rec.id}-${i}`;
+          if (setIdSet.has(tid)) continue;
+          const t = rec.tracks[i];
+          if (t.bpm == null) continue;
+          pool.push({ tid, record: rec, track: t });
+        }
+      }
+    } else if (queue && queue.length > 1) {
+      pool = queue
+        .map((q, i) => ({ ...q, qIdx: i }))
+        .filter((q, i) => i !== position && q.track.bpm != null);
+    }
     const scored = pool.map(q => {
       const bpmDiff = Math.abs(q.track.bpm - curBpm);
-      const keyPenalty = window.camelotDistance(curKey, q.track.key);
-      // BPM-first: score = bpmDiff * 2 + keyPenalty (key still matters but doesn't dominate)
+      const keyPenalty = cd(curKey, q.track.key);
       return { ...q, bpmDiff, keyPenalty, score: bpmDiff * 2 + keyPenalty };
     });
     scored.sort((a, b) => a.score - b.score);
     return scored.slice(0, 3);
-  }, [current, queue, position, curBpm, curKey]);
+  }, [current, queue, position, curBpm, curKey, records, setTrackIds, fromCollection]);
 
   // Next 3 tracks in queue order (wraps around).
   const upNext = React.useMemo(() => {
@@ -521,21 +539,30 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
           <div style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
             textTransform: 'uppercase', opacity: 0.55, marginBottom: 8,
-          }}>Mix suggestions · from this set</div>
+            display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap',
+          }}>
+            <span>Mix suggestions</span>
+            <span style={{ opacity: 0.7 }}>
+              · {fromCollection ? 'from your collection' : 'from this set'}
+            </span>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 16 }}>
             {suggestions.map(s => {
               const harm = s.keyPenalty === 0 ? 'same key'
                 : s.keyPenalty === 1 ? 'harmonic'
                 : s.keyPenalty <= 2 ? 'close' : 'clash';
-              const tag = s.bpmDiff === 0 ? 'exact BPM'
-                : `±${s.bpmDiff} BPM`;
+              const tag = s.bpmDiff === 0 ? 'exact BPM' : `±${s.bpmDiff} BPM`;
               const good = s.bpmDiff <= 4 && s.keyPenalty <= 1;
+              const canAdd = fromCollection && onAddTrack;
+              const trackIndex = canAdd
+                ? s.record.tracks.findIndex(t => t === s.track)
+                : -1;
               return (
-                <button key={s.tid} onClick={() => onJumpTo && onJumpTo(s.qIdx)} style={{
+                <div key={s.tid} style={{
                   display: 'flex', gap: 10, alignItems: 'center', padding: 10,
                   borderRadius: 10, background: soft,
                   border: `1px solid ${good ? accent : border}`,
-                  color: fg, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+                  color: fg, fontFamily: 'inherit',
                   width: '100%',
                 }}>
                   <RecordCover hue={s.record.cover.hue} shape={s.record.cover.shape}
@@ -543,19 +570,20 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
                     title={s.record.title} artist={s.record.artist} size={42}
                     style={{ width: 42, height: 42, borderRadius: 4, flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {s.track.n && (
-                      <div style={{
-                        fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5,
-                        fontWeight: 700, letterSpacing: 1,
-                        color: accent, marginBottom: 1,
-                      }}>{s.track.n}</div>
-                    )}
                     <div style={{ fontSize: 12, fontWeight: 600,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {s.track.title}
                     </div>
+                    {fromCollection && (
+                      <div style={{ fontSize: 10, opacity: 0.6,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3 }}>
+                        {s.record.artist}
+                      </div>
+                    )}
                     <div style={{ fontSize: 10, opacity: 0.6,
-                      fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3 }}>
+                      fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3,
+                      marginTop: 1 }}>
                       {tag} · {harm}
                     </div>
                   </div>
@@ -567,7 +595,28 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
                     <div style={{ fontFamily: 'JetBrains Mono, monospace',
                       fontSize: 9, opacity: 0.65 }}>{s.track.key ?? '—'}</div>
                   </div>
-                </button>
+                  {canAdd && trackIndex >= 0 ? (
+                    <button onClick={() => onAddTrack(s.record, trackIndex)}
+                      title="Add to set"
+                      style={{
+                        width: 30, height: 30, borderRadius: 15, border: 'none',
+                        background: accent, color: '#0E0C0A',
+                        cursor: 'pointer', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 17, fontWeight: 700, lineHeight: 1,
+                      }}>+</button>
+                  ) : !fromCollection && onJumpTo && (
+                    <button onClick={() => onJumpTo(s.qIdx)}
+                      title="Jump to track" style={{
+                        padding: '5px 8px', borderRadius: 6,
+                        background: 'transparent',
+                        border: `1px solid ${border}`, color: fg,
+                        fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                        fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+                        cursor: 'pointer', flexShrink: 0,
+                      }}>Jump</button>
+                  )}
+                </div>
               );
             })}
           </div>

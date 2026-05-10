@@ -1041,6 +1041,8 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
           return p ? { tid, ...p } : null;
         }).filter(Boolean);
         return <GigMode resolved={resolved}
+          records={records} setTrackIds={set}
+          onAddTrack={toggleTrack}
           theme={tweaks.theme} accent={ACCENTS[tweaks.accent] || tweaks.accent}
           onClose={() => { setGigMode(false); setGigResolved(null); }} />;
       })()}

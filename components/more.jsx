@@ -311,7 +311,8 @@ function SectionHeader({ children }) {
 
 // ─────────── Gig mode ───────────
 
-function GigMode({ resolved, theme, accent, onClose }) {
+function GigMode({ resolved, records = [], setTrackIds = [], onAddTrack,
+                   theme, accent, onClose }) {
   const [index, setIndex] = React.useState(0);
   const [elapsed, setElapsed] = React.useState(0);
   const [running, setRunning] = React.useState(false);
@@ -350,24 +351,46 @@ function GigMode({ resolved, theme, accent, onClose }) {
   const next = () => setIndex(i => Math.min(resolved.length - 1, i + 1));
   const prev = () => setIndex(i => Math.max(0, i - 1));
 
-  // Mix suggestions: best BPM/key matches from the rest of the set.
-  // Score = bpmDiff * 2 + keyPenalty — same weighting as the phone Gig view.
+  // Mix suggestions: best BPM/key matches FROM RECORDS NOT IN THE SET so the
+  // DJ can pull fresh tracks during the gig. Score = bpmDiff * 2 +
+  // keyPenalty (same weighting as the mobile gig view). Falls back to the
+  // legacy "from this set" mode when no records collection was passed.
   const suggestions = React.useMemo(() => {
-    if (resolved.length < 2) return [];
     const cur = resolved[index];
     if (!cur || cur.track.bpm == null) return [];
-    const pool = resolved
-      .map((q, i) => ({ ...q, qIdx: i }))
-      .filter((q, i) => i !== index && i !== index + 1 && q.track.bpm != null);
     const cd = window.camelotDistance || (() => 3);
+    const setIdSet = new Set(setTrackIds || []);
+
+    // Pool: every track on every record, minus tracks already in this set
+    // and the current track itself. If records isn't provided, fall back to
+    // the in-set pool so old callers still get something.
+    let pool = [];
+    if (records && records.length > 0) {
+      for (const rec of records) {
+        for (let i = 0; i < (rec.tracks || []).length; i++) {
+          const tid = `${rec.id}-${i}`;
+          if (setIdSet.has(tid)) continue;
+          const t = rec.tracks[i];
+          if (t.bpm == null) continue;
+          pool.push({ tid, record: rec, track: t });
+        }
+      }
+    } else {
+      pool = resolved
+        .map((q, i) => ({ ...q, qIdx: i }))
+        .filter((q, i) => i !== index && q.track.bpm != null);
+    }
+
     const scored = pool.map(q => {
       const bpmDiff = Math.abs(q.track.bpm - cur.track.bpm);
       const keyPenalty = cd(cur.track.key, q.track.key);
       return { ...q, bpmDiff, keyPenalty, score: bpmDiff * 2 + keyPenalty };
     });
     scored.sort((a, b) => a.score - b.score);
-    return scored.slice(0, 3);
-  }, [resolved, index]);
+    return scored.slice(0, 4);
+  }, [resolved, index, records, setTrackIds]);
+
+  const fromCollection = !!(records && records.length > 0);
 
   if (resolved.length === 0) return null;
   const cur = resolved[index];
@@ -507,13 +530,21 @@ function GigMode({ resolved, theme, accent, onClose }) {
                 </div>
               )}
 
-              {/* Mix suggestions — BPM/key scored picks from anywhere in the set */}
+              {/* Mix suggestions — BPM/key scored picks from the rest of
+                  the collection (not the set), so the DJ can pull fresh
+                  material live and add it on the fly via the + button. */}
               {suggestions.length > 0 && (
                 <>
                   <div style={{
                     fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 2,
                     textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 10,
-                  }}>Mix suggestions</div>
+                    display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap',
+                  }}>
+                    <span>Mix suggestions</span>
+                    <span style={{ color: 'var(--fg)', opacity: 0.55, fontSize: 9 }}>
+                      · {fromCollection ? 'from your collection' : 'from this set'}
+                    </span>
+                  </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 22 }}>
                     {suggestions.map(s => {
                       const harm = s.keyPenalty === 0 ? 'same key'
@@ -521,30 +552,34 @@ function GigMode({ resolved, theme, accent, onClose }) {
                         : s.keyPenalty <= 2 ? 'close' : 'clash';
                       const tag = s.bpmDiff === 0 ? 'exact BPM' : `±${s.bpmDiff} BPM`;
                       const good = s.bpmDiff <= 4 && s.keyPenalty <= 1;
+                      const canAdd = fromCollection && onAddTrack;
+                      const trackIndex = canAdd
+                        ? s.record.tracks.findIndex(t => t === s.track)
+                        : -1;
                       return (
-                        <button key={s.tid} onClick={() => setIndex(s.qIdx)}
-                          title={`Jump to track ${s.qIdx + 1}`}
+                        <div key={s.tid}
                           style={{
                             display: 'flex', gap: 10, alignItems: 'center', padding: 10,
                             borderRadius: 8, background: 'var(--hover)',
                             border: `1px solid ${good ? accentColor : 'var(--border)'}`,
                             color: 'var(--fg)', fontFamily: 'inherit',
-                            cursor: 'pointer', textAlign: 'left', width: '100%',
+                            width: '100%',
                           }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            {s.track.n && (
-                              <div style={{
-                                fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
-                                fontWeight: 700, letterSpacing: 1,
-                                color: accentColor, marginBottom: 1,
-                              }}>{s.track.n}</div>
-                            )}
                             <div style={{ fontSize: 13, fontWeight: 600,
                               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {s.track.title}
                             </div>
+                            {fromCollection && (
+                              <div style={{ fontSize: 10, color: 'var(--dim)',
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3 }}>
+                                {s.record.artist} · {s.record.title}
+                              </div>
+                            )}
                             <div style={{ fontSize: 10, color: 'var(--dim)',
-                              fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3 }}>
+                              fontFamily: 'JetBrains Mono, monospace', letterSpacing: 0.3,
+                              marginTop: 2 }}>
                               {tag} · {harm}
                             </div>
                           </div>
@@ -557,7 +592,29 @@ function GigMode({ resolved, theme, accent, onClose }) {
                             <div style={{ fontFamily: 'JetBrains Mono, monospace',
                               fontSize: 10, color: 'var(--dim)' }}>{s.track.key ?? '—'}</div>
                           </div>
-                        </button>
+                          {canAdd && trackIndex >= 0 ? (
+                            <button onClick={() => onAddTrack(s.record, trackIndex)}
+                              title="Add to set"
+                              style={{
+                                width: 32, height: 32, borderRadius: 16, border: 'none',
+                                background: accentColor, color: '#0E0C0A',
+                                cursor: 'pointer', flexShrink: 0,
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 18, fontWeight: 700, lineHeight: 1,
+                              }}>+</button>
+                          ) : !fromCollection && (
+                            <button onClick={() => setIndex(s.qIdx)}
+                              title={`Jump to track ${s.qIdx + 1}`}
+                              style={{
+                                padding: '6px 10px', borderRadius: 6,
+                                background: 'transparent',
+                                border: '1px solid var(--border)', color: 'var(--fg)',
+                                fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
+                                fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
+                                cursor: 'pointer', flexShrink: 0,
+                              }}>Jump</button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
