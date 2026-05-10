@@ -385,19 +385,25 @@ function SwipeBtn({ children, onClick, dir, primary }) {
 function TrackList({ resolved, keyTransitions, onRemove, onReorder }) {
   const [dragIdx, setDragIdx] = React.useState(null);
   const [overIdx, setOverIdx] = React.useState(null);
+  // When the saved set is being displayed in a sorted preview, reorder
+  // callbacks are null — drag handles and ↑↓ chips do nothing.
+  const reorderEnabled = !!onReorder;
 
   const onDragStart = (i) => (e) => {
+    if (!reorderEnabled) { e.preventDefault(); return; }
     setDragIdx(i);
     e.dataTransfer.effectAllowed = 'move';
     // Firefox requires setData to fire drag events
     try { e.dataTransfer.setData('text/plain', String(i)); } catch {}
   };
   const onDragOver = (i) => (e) => {
+    if (!reorderEnabled) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     if (overIdx !== i) setOverIdx(i);
   };
   const onDrop = (i) => (e) => {
+    if (!reorderEnabled) return;
     e.preventDefault();
     if (dragIdx != null && dragIdx !== i) onReorder(dragIdx, i);
     setDragIdx(null); setOverIdx(null);
@@ -413,7 +419,7 @@ function TrackList({ resolved, keyTransitions, onRemove, onReorder }) {
         const isOver = overIdx === i && dragIdx !== null && dragIdx !== i;
         return (
           <div key={r.tid + i}
-            draggable
+            draggable={reorderEnabled}
             onDragStart={onDragStart(i)}
             onDragOver={onDragOver(i)}
             onDrop={onDrop(i)}
@@ -426,8 +432,8 @@ function TrackList({ resolved, keyTransitions, onRemove, onReorder }) {
             }}>
             <TrackRow resolved={r} index={i}
               onRemove={() => onRemove(r.tid)}
-              onMoveUp={i > 0 ? () => onReorder(i, i - 1) : null}
-              onMoveDown={i < resolved.length - 1 ? () => onReorder(i, i + 1) : null}
+              onMoveUp={reorderEnabled && i > 0 ? () => onReorder(i, i - 1) : null}
+              onMoveDown={reorderEnabled && i < resolved.length - 1 ? () => onReorder(i, i + 1) : null}
               bpmDelta={bpmDelta}
               keyTransition={i > 0 ? keyTransitions[i - 1] : null} />
           </div>

@@ -963,6 +963,10 @@ function SavedSetCard({ set, isActive, onOpen, onDelete, onTogglePublic }) {
 
 function SavedSetPage({ savedSet, records, onBack, onRename, onUpdateTracks, onUpdateGigs, onTogglePublic, onDelete, onLoadToBuilder, onLaunchGig }) {
   const [showTimeline, setShowTimeline] = React.useState(false);
+  // Non-destructive sort. 'manual' shows the saved order. Other modes
+  // reorder the display only; the user can "Apply this order" to commit
+  // the current view as the new persisted order.
+  const [sortMode, setSortMode] = React.useState('manual');
   if (!savedSet) {
     return (
       <div style={{
@@ -996,9 +1000,36 @@ function SavedSetPage({ savedSet, records, onBack, onRename, onUpdateTracks, onU
     return sum + (m || 0) + (s || 0) / 60;
   }, 0);
   const bpms = resolved.map(r => r.track.bpm).filter(b => b != null);
+
+  // Apply non-destructive sort to derive the on-screen order. Manual mode
+  // returns the saved order untouched.
+  const displayed = React.useMemo(() => {
+    if (sortMode === 'manual') return resolved;
+    const arr = [...resolved];
+    if (sortMode === 'bpm') {
+      arr.sort((a, b) => (a.track.bpm ?? Infinity) - (b.track.bpm ?? Infinity));
+    } else if (sortMode === 'key') {
+      // Camelot number then letter — same-key tracks group, adjacent-key
+      // tracks land next to each other on the wheel.
+      const parseK = (k) => {
+        const m = (k || '').match(/^(\d+)([AB])$/i);
+        return m ? { n: parseInt(m[1], 10), l: m[2].toUpperCase() } : { n: 99, l: 'Z' };
+      };
+      arr.sort((a, b) => {
+        const pa = parseK(a.track.key), pb = parseK(b.track.key);
+        return pa.n - pb.n || pa.l.localeCompare(pb.l);
+      });
+    } else if (sortMode === 'energy') {
+      arr.sort((a, b) => (a.track.energy ?? 0) - (b.track.energy ?? 0));
+    }
+    return arr;
+  }, [resolved, sortMode]);
+
+  // Recompute transitions over the displayed order so the harmonic/tension
+  // indicators stay accurate after a sort.
   const keyTransitions = [];
-  for (let i = 1; i < resolved.length; i++) {
-    const k1 = resolved[i - 1].track.key, k2 = resolved[i].track.key;
+  for (let i = 1; i < displayed.length; i++) {
+    const k1 = displayed[i - 1].track.key, k2 = displayed[i].track.key;
     if (!k1 || !k2) { keyTransitions.push({ from: k1, to: k2, harmonic: false, unknown: true }); continue; }
     const n1 = parseInt(k1), n2 = parseInt(k2);
     const l1 = k1.slice(-1), l2 = k2.slice(-1);
@@ -1006,6 +1037,12 @@ function SavedSetPage({ savedSet, records, onBack, onRename, onUpdateTracks, onU
     const harmonic = (l1 === l2 && diff <= 1) || (diff === 0);
     keyTransitions.push({ from: k1, to: k2, harmonic });
   }
+
+  // Commit the current displayed order as the new persisted track sequence.
+  const applySortedOrder = () => {
+    onUpdateTracks(savedSet.id, displayed.map(r => r.tid));
+    setSortMode('manual');
+  };
 
   return (
     <div style={{
@@ -1124,6 +1161,55 @@ function SavedSetPage({ savedSet, records, onBack, onRename, onUpdateTracks, onU
 
       {showTimeline && resolved.length > 0 && <SetTimeline resolved={resolved} />}
 
+      {/* Sort toolbar — non-destructive view sort. Manual = saved order.
+          Other modes preview a sorted view; "Apply this order" commits
+          the current arrangement as the new persisted order. */}
+      {resolved.length > 1 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+          flexWrap: 'wrap',
+        }}>
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
+            textTransform: 'uppercase', color: 'var(--dim)', marginRight: 4,
+          }}>Sort</span>
+          {[
+            { id: 'manual', label: 'Manual' },
+            { id: 'bpm',    label: 'BPM' },
+            { id: 'key',    label: 'Key' },
+            { id: 'energy', label: 'Energy' },
+          ].map(opt => {
+            const active = sortMode === opt.id;
+            return (
+              <button key={opt.id} onClick={() => setSortMode(opt.id)} style={{
+                padding: '5px 10px', borderRadius: 999,
+                background: active ? 'var(--accent)' : 'transparent',
+                color: active ? 'var(--on-accent)' : 'var(--fg)',
+                border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700,
+                letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+              }}>{opt.label}</button>
+            );
+          })}
+          {sortMode !== 'manual' && (
+            <>
+              <span style={{
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1,
+                color: 'var(--dim)', textTransform: 'uppercase',
+                marginLeft: 4,
+              }}>· Preview only</span>
+              <div style={{ flex: 1 }} />
+              <button onClick={applySortedOrder} style={{
+                padding: '6px 12px', borderRadius: 6, border: 'none',
+                background: 'var(--accent)', color: 'var(--on-accent)',
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 9, fontWeight: 700,
+                letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+              }}>Apply this order</button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Tracks */}
       {resolved.length === 0 ? (
         <div style={{
@@ -1134,8 +1220,9 @@ function SavedSetPage({ savedSet, records, onBack, onRename, onUpdateTracks, onU
           <div style={{ fontSize: 13 }}>This set is empty. Add some tracks below.</div>
         </div>
       ) : (
-        <TrackList resolved={resolved} keyTransitions={keyTransitions}
-          onRemove={removeTrack} onReorder={reorderTrack} />
+        <TrackList resolved={displayed} keyTransitions={keyTransitions}
+          onRemove={removeTrack}
+          onReorder={sortMode === 'manual' ? reorderTrack : null} />
       )}
 
       {/* Add tracks picker */}
