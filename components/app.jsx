@@ -897,9 +897,17 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               advFilters={advFilters} set={set}
               onBrowseCollection={() => setView('collection')} />
           )}
-          {view === 'sets' && (
+          {view === 'sets' && !viewingSetId && (
+            <SavedSetsHub savedSets={savedSets} activeSetId={activeSetId}
+              onOpen={openSavedSet}
+              onDelete={deleteSavedSet}
+              onTogglePublic={toggleSavedSetPublic}
+              onNewSet={() => setView('set')} />
+          )}
+          {view === 'sets' && viewingSetId && (
             <SavedSetPage savedSet={savedSets.find(s => s.id === viewingSetId)}
               records={records}
+              onBack={() => setViewingSetId(null)}
               onRename={renameSavedSet}
               onUpdateTracks={updateSavedSetTracks}
               onUpdateGigs={updateSavedSetGigs}
@@ -1036,6 +1044,9 @@ function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord,
         <NavItem icon={Icon.Heart} label="Crates"
           active={view === 'crates'} onClick={() => { setActiveCrateId(null); setView('crates'); }}
           badge={crates.length > 0 ? crates.length : null} />
+        <NavItem icon={Icon.Stack} label="Sets"
+          active={view === 'sets'} onClick={() => { onOpenSet && onOpenSet(null); setView('sets'); }}
+          badge={savedSets.length > 0 ? savedSets.length : null} />
         <NavItem icon={Icon.Deck} label="Set Builder"
           active={view === 'set'} onClick={() => setView('set')}
           badge={set.length > 0 ? set.length : null} accent={set.length > 0} />
@@ -1049,10 +1060,6 @@ function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord,
             active={false} onClick={onFindDjs} />
         )}
       </nav>
-
-      <SavedSetsList savedSets={savedSets} currentSet={set}
-        activeSetId={activeSetId} viewingSetId={view === 'sets' ? viewingSetId : null}
-        onSave={onSaveSet} onOpen={onOpenSet} onDelete={onDeleteSet} />
 
       <div style={{ flex: 1 }} />
 
@@ -1295,7 +1302,7 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
           {view === 'collection' && <>Showing <span style={{ color: 'var(--fg)', fontWeight: 700 }}>{count}</span> / {total}</>}
           {view === 'crates' && <>Organize records into named groups</>}
           {view === 'set' && <>Swipe right to add · swipe left to skip</>}
-          {view === 'sets' && <>Pick a set from the sidebar</>}
+          {view === 'sets' && (viewingSetId ? <>Tap the back arrow to see all sets</> : <>{savedSets.length} saved · click to open</>)}
           {view === 'calendar' && <>Upcoming gigs and past sets</>}
           {view === 'dashboard' && <>Everything at a glance</>}
         </div>

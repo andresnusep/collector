@@ -677,7 +677,165 @@ function TransitionHint({ fromBpm, toBpm, fromKey, toKey, accentColor }) {
 
 // ─────────── Saved set page ───────────
 
-function SavedSetPage({ savedSet, records, onRename, onUpdateTracks, onUpdateGigs, onTogglePublic, onDelete, onLoadToBuilder, onLaunchGig }) {
+// Hub view shown when the user hits the Sets tab without a specific set
+// selected. Lists every saved set as a card; clicking opens the existing
+// SavedSetPage detail view. Replaces the old sidebar-inline saved-sets
+// list which grew unbounded as the collection grew.
+function SavedSetsHub({ savedSets, activeSetId, onOpen, onDelete,
+                        onTogglePublic, onNewSet }) {
+  const total = savedSets.length;
+  return (
+    <div style={{ padding: '4px 0 40px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between',
+        alignItems: 'flex-end', marginBottom: 18, gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1.5,
+            textTransform: 'uppercase', color: 'var(--dim)', marginBottom: 4,
+          }}>{total} saved · click to open</div>
+          <div style={{ fontSize: 13, color: 'var(--dim)' }}>
+            Saved set lists you've built. Toggle public per set to surface
+            them on your DJ profile.
+          </div>
+        </div>
+        <button onClick={onNewSet} style={{
+          padding: '10px 16px', borderRadius: 8, border: 'none',
+          background: 'var(--accent)', color: 'var(--on-accent)',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
+          letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>{Icon.Plus} New set in builder</button>
+      </div>
+
+      {total === 0 ? (
+        <div style={{
+          padding: 40, textAlign: 'center', borderRadius: 12,
+          border: '1px dashed var(--border)', color: 'var(--dim)',
+        }}>
+          <div style={{ fontSize: 14, marginBottom: 8 }}>No saved sets yet.</div>
+          <div style={{ fontSize: 12, lineHeight: 1.55 }}>
+            Build a tracklist in the Set Builder, hit Save, and it shows up
+            here. Toggle a set "Public" to feature it on your profile.
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+          gap: 12,
+        }}>
+          {savedSets.map(s => (
+            <SavedSetCard key={s.id} set={s}
+              isActive={s.id === activeSetId}
+              onOpen={() => onOpen(s.id)}
+              onDelete={() => {
+                if (confirm(`Delete saved set "${s.name}"?`)) onDelete(s.id);
+              }}
+              onTogglePublic={() => onTogglePublic(s.id, !s.is_public)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SavedSetCard({ set, isActive, onOpen, onDelete, onTogglePublic }) {
+  const trackCount = (set.trackIds || []).length;
+  // Total minutes pulled from track snapshot (set at save time) when present,
+  // else from window.parseTrackId for live resolution.
+  const totalMin = React.useMemo(() => {
+    const snap = Array.isArray(set.trackSnapshot) ? set.trackSnapshot : null;
+    const src = snap || (window.parseTrackId
+      ? (set.trackIds || []).map(tid => {
+          const p = window.parseTrackId(tid);
+          return p ? { len: p.track.len } : null;
+        }).filter(Boolean)
+      : []);
+    let mins = 0;
+    for (const t of src) {
+      const [m, s] = (t.len || '0:00').split(':').map(Number);
+      mins += (m || 0) + (s || 0) / 60;
+    }
+    return Math.floor(mins);
+  }, [set]);
+
+  const gigCount = Array.isArray(set.gigs) ? set.gigs.length : (set.gig ? 1 : 0);
+
+  return (
+    <div style={{
+      padding: 16, borderRadius: 12, position: 'relative',
+      background: 'var(--panel)',
+      border: '1px solid ' + (isActive ? 'var(--accent)' : 'var(--border)'),
+      cursor: 'pointer',
+      transition: 'border-color 0.15s, transform 0.15s',
+    }}
+    onClick={onOpen}
+    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8,
+        marginBottom: 8, flexWrap: 'wrap' }}>
+        {isActive && (
+          <span style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5, fontWeight: 700,
+            padding: '2px 6px', borderRadius: 3, letterSpacing: 1,
+            background: 'var(--accent)', color: 'var(--on-accent)',
+            textTransform: 'uppercase',
+          }}>Active</span>
+        )}
+        <button onClick={(e) => { e.stopPropagation(); onTogglePublic(); }}
+          title={set.is_public ? 'Public on your DJ profile' : 'Private — only you can see'}
+          style={{
+            fontFamily: 'JetBrains Mono, monospace', fontSize: 8.5, fontWeight: 700,
+            padding: '2px 6px', borderRadius: 3, letterSpacing: 1,
+            background: set.is_public ? 'var(--accent)' : 'transparent',
+            color: set.is_public ? 'var(--on-accent)' : 'var(--dim)',
+            border: '1px solid ' + (set.is_public ? 'var(--accent)' : 'var(--border)'),
+            cursor: 'pointer', textTransform: 'uppercase',
+          }}>{set.is_public ? 'Public' : 'Private'}</button>
+      </div>
+
+      <div style={{
+        fontSize: 17, fontWeight: 700, letterSpacing: -0.4, lineHeight: 1.2,
+        marginBottom: 10,
+        overflow: 'hidden', display: '-webkit-box',
+        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+      }}>{set.name || 'Untitled set'}</div>
+
+      <div style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+        letterSpacing: 1, textTransform: 'uppercase', color: 'var(--dim)',
+        display: 'flex', gap: 14, flexWrap: 'wrap',
+      }}>
+        <span>{trackCount} track{trackCount === 1 ? '' : 's'}</span>
+        {totalMin > 0 && <span>{totalMin} min</span>}
+        {gigCount > 0 && <span style={{ color: 'var(--accent)' }}>{gigCount} gig{gigCount === 1 ? '' : 's'}</span>}
+      </div>
+
+      <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        title="Delete set"
+        style={{
+          position: 'absolute', top: 10, right: 10,
+          width: 26, height: 26, borderRadius: 13, padding: 0,
+          background: 'transparent', border: '1px solid var(--border)',
+          color: 'var(--dim)', cursor: 'pointer', opacity: 0.6,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, lineHeight: 1,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.opacity = 1;
+          e.currentTarget.style.color = '#E74C5C';
+          e.currentTarget.style.borderColor = '#E74C5C';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.opacity = 0.6;
+          e.currentTarget.style.color = 'var(--dim)';
+          e.currentTarget.style.borderColor = 'var(--border)';
+        }}>×</button>
+    </div>
+  );
+}
+
+function SavedSetPage({ savedSet, records, onBack, onRename, onUpdateTracks, onUpdateGigs, onTogglePublic, onDelete, onLoadToBuilder, onLaunchGig }) {
   const [showTimeline, setShowTimeline] = React.useState(false);
   if (!savedSet) {
     return (
@@ -739,6 +897,15 @@ function SavedSetPage({ savedSet, records, onRename, onUpdateTracks, onUpdateGig
             textTransform: 'uppercase', color: 'var(--dim)',
             display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
           }}>
+            {onBack && (
+              <button onClick={onBack} title="All sets" style={{
+                background: 'transparent', border: '1px solid var(--border)',
+                color: 'var(--fg)', cursor: 'pointer', padding: '2px 8px',
+                borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 9, fontWeight: 700, letterSpacing: 1,
+                textTransform: 'uppercase',
+              }}>← All sets</button>
+            )}
             <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />
             Saved set · {new Date(savedSet.createdAt || Date.now()).toLocaleDateString()}
             {onTogglePublic && (
@@ -1197,4 +1364,4 @@ const gigInput = {
   color: 'var(--fg)', fontSize: 13, fontFamily: 'inherit', outline: 'none',
 };
 
-Object.assign(window, { TrackRating, SetTimeline, Dashboard, GigMode, SavedSetPage, GigRecord });
+Object.assign(window, { TrackRating, SetTimeline, Dashboard, GigMode, SavedSetPage, SavedSetsHub, GigRecord });
