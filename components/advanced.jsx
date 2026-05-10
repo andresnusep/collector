@@ -634,7 +634,7 @@ function SavedSetsList({ savedSets, currentSet, activeSetId, viewingSetId, onSav
 function CratesPage({ crates, records, activeCrateId, setActiveCrateId, onSelect,
                      onDeleteCrate, onRemoveFromCrate, onNewCrate,
                      onAddToSet, inSet, density, showOverlays,
-                     sortBy, search, viewStyle, advFilters, set,
+                     sortBy, search, viewStyle, setViewStyle, advFilters, set,
                      onBrowseCollection }) {
   const activeCrate = crates.find(c => c.id === activeCrateId);
 
@@ -736,28 +736,69 @@ function CratesPage({ crates, records, activeCrateId, setActiveCrateId, onSelect
     );
   }
 
-  // Gallery
+  // Gallery — supports grid (cards with cover preview), list (compact rows),
+  // or stack (falls through to grid for now since crates already are a
+  // gallery layout). Switch with the toggle in the header.
+  const galleryView = viewStyle === 'list' ? 'list' : 'grid';
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-      gap: 18,
-    }}>
-      {crates.map(c => (
-        <CrateTile key={c.id} crate={c} records={records}
-          onOpen={() => setActiveCrateId(c.id)}
-          onDelete={() => { if (confirm(`Delete crate "${c.name}"?`)) onDeleteCrate(c.id); }} />
-      ))}
-      <NewCrateTile onNewCrate={(name) => {
-        const id = onNewCrate(name);
-        if (id) setActiveCrateId(id);
-      }} />
-      {crates.length === 0 && (
+    <div>
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 18, gap: 12, flexWrap: 'wrap',
+      }}>
         <div style={{
-          gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center',
-          color: 'var(--dim)', fontSize: 13,
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+          letterSpacing: 1.2, textTransform: 'uppercase', color: 'var(--dim)',
+        }}>{crates.length} crate{crates.length === 1 ? '' : 's'}</div>
+        <CrateViewToggle value={galleryView} onChange={setViewStyle} />
+      </div>
+
+      {galleryView === 'grid' ? (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+          gap: 18,
         }}>
-          No crates yet — create one above to start organizing records.
+          {crates.map(c => (
+            <CrateTile key={c.id} crate={c} records={records}
+              onOpen={() => setActiveCrateId(c.id)}
+              onDelete={() => { if (confirm(`Delete crate "${c.name}"?`)) onDeleteCrate(c.id); }} />
+          ))}
+          <NewCrateTile onNewCrate={(name) => {
+            const id = onNewCrate(name);
+            if (id) setActiveCrateId(id);
+          }} />
+          {crates.length === 0 && (
+            <div style={{
+              gridColumn: '1 / -1', padding: '40px 20px', textAlign: 'center',
+              color: 'var(--dim)', fontSize: 13,
+            }}>
+              No crates yet — create one above to start organizing records.
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          {crates.map(c => (
+            <CrateRow key={c.id} crate={c} records={records}
+              onOpen={() => setActiveCrateId(c.id)}
+              onDelete={() => { if (confirm(`Delete crate "${c.name}"?`)) onDeleteCrate(c.id); }} />
+          ))}
+          <NewCrateRow onNewCrate={(name) => {
+            const id = onNewCrate(name);
+            if (id) setActiveCrateId(id);
+          }} />
+          {crates.length === 0 && (
+            <div style={{
+              padding: '40px 20px', textAlign: 'center',
+              color: 'var(--dim)', fontSize: 13,
+              border: '1px dashed var(--border)', borderRadius: 10,
+            }}>
+              No crates yet — create one above to start organizing records.
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -831,6 +872,162 @@ function CrateTile({ crate, records, onOpen, onDelete }) {
         fontSize: 14, lineHeight: 1,
       }} title="Delete crate">×</button>
     </div>
+  );
+}
+
+// Small grid/list switcher anchored in the Crates gallery header. Uses the
+// global viewStyle so the user's choice persists with their other view
+// preferences. Stack maps to grid here since crates already are a gallery
+// layout — a "stack" of stacks doesn't add information.
+function CrateViewToggle({ value, onChange }) {
+  const items = [
+    { id: 'grid', icon: Icon.Grid, title: 'Grid view' },
+    { id: 'list', icon: Icon.List, title: 'List view' },
+  ];
+  if (!onChange) return null;
+  return (
+    <div style={{ display: 'flex', gap: 4,
+      border: '1px solid var(--border)', borderRadius: 6, padding: 3 }}>
+      {items.map(v => {
+        const active = (value === 'list' ? 'list' : 'grid') === v.id;
+        return (
+          <button key={v.id}
+            onClick={() => onChange(v.id)}
+            title={v.title}
+            style={{
+              width: 28, height: 24, border: 'none', borderRadius: 4,
+              background: active ? 'var(--accent)' : 'transparent',
+              color: active ? 'var(--on-accent)' : 'var(--fg)',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>{v.icon}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+function CrateRow({ crate, records, onOpen, onDelete }) {
+  const items = crate.recordIds.map(id => records.find(r => r.id === id)).filter(Boolean);
+  const previews = items.slice(0, 4);
+  return (
+    <div onClick={onOpen} style={{
+      display: 'flex', alignItems: 'center', gap: 14,
+      padding: '10px 14px', borderRadius: 10,
+      background: 'var(--panel)', border: '1px solid var(--border)',
+      cursor: 'pointer', transition: 'border-color 0.15s, transform 0.15s',
+    }}
+    onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; }}
+    onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
+      <div style={{
+        position: 'relative', width: 72, height: 44, flexShrink: 0,
+      }}>
+        {previews.length === 0 ? (
+          <div style={{
+            position: 'absolute', inset: 0, borderRadius: 4,
+            border: '1px dashed var(--border)', opacity: 0.5,
+          }} />
+        ) : previews.map((r, i) => (
+          <div key={r.id} style={{
+            position: 'absolute', top: 0, bottom: 0,
+            left: i * 14, width: 44, borderRadius: 4, overflow: 'hidden',
+            boxShadow: i > 0 ? '-4px 0 8px rgba(0,0,0,0.18)' : 'none',
+            border: '1px solid var(--border)',
+          }}>
+            <RecordCover hue={r.cover.hue} shape={r.cover.shape}
+              imageUrl={r.cover.image}
+              title={r.title} artist={r.artist} size={44}
+              style={{ width: '100%', height: '100%' }} />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {crate.name}
+        </div>
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1,
+          textTransform: 'uppercase', color: 'var(--dim)', marginTop: 3,
+        }}>{items.length} record{items.length === 1 ? '' : 's'}</div>
+      </div>
+
+      <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        title="Delete crate" style={{
+          width: 26, height: 26, borderRadius: 13, padding: 0,
+          background: 'transparent', border: '1px solid var(--border)',
+          color: 'var(--dim)', cursor: 'pointer', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, lineHeight: 1, opacity: 0.5,
+        }}
+        onMouseEnter={(e) => {
+          e.stopPropagation();
+          e.currentTarget.style.opacity = 1;
+          e.currentTarget.style.color = '#E74C5C';
+          e.currentTarget.style.borderColor = '#E74C5C';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.opacity = 0.5;
+          e.currentTarget.style.color = 'var(--dim)';
+          e.currentTarget.style.borderColor = 'var(--border)';
+        }}>×</button>
+
+      <span style={{ opacity: 0.4, fontSize: 14, flexShrink: 0 }}>›</span>
+    </div>
+  );
+}
+
+function NewCrateRow({ onNewCrate }) {
+  const [creating, setCreating] = React.useState(false);
+  const [name, setName] = React.useState('');
+  const submit = () => {
+    if (name.trim()) onNewCrate(name.trim());
+    setName(''); setCreating(false);
+  };
+  if (creating) {
+    return (
+      <div style={{
+        padding: '10px 14px', borderRadius: 10,
+        background: 'var(--hover)', border: '1px dashed var(--accent)',
+      }}>
+        <input autoFocus value={name} onChange={e => setName(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') submit();
+            if (e.key === 'Escape') { setName(''); setCreating(false); }
+          }}
+          onBlur={submit}
+          placeholder="Crate name…"
+          style={{
+            width: '100%', padding: '6px 8px', borderRadius: 6,
+            background: 'transparent', border: 'none', outline: 'none',
+            color: 'var(--fg)', fontSize: 14, fontFamily: 'inherit',
+          }} />
+      </div>
+    );
+  }
+  return (
+    <button onClick={() => setCreating(true)} style={{
+      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+      padding: '12px 14px', borderRadius: 10,
+      border: '1px dashed var(--border)', background: 'transparent',
+      color: 'var(--dim)', cursor: 'pointer', fontFamily: 'inherit',
+      textAlign: 'left',
+    }}
+    onMouseEnter={(e) => {
+      e.currentTarget.style.borderColor = 'var(--accent)';
+      e.currentTarget.style.color = 'var(--accent)';
+    }}
+    onMouseLeave={(e) => {
+      e.currentTarget.style.borderColor = 'var(--border)';
+      e.currentTarget.style.color = 'var(--dim)';
+    }}>
+      <span style={{ fontSize: 18, fontWeight: 300 }}>+</span>
+      <span style={{
+        fontFamily: 'JetBrains Mono, monospace', fontSize: 10, letterSpacing: 1,
+        textTransform: 'uppercase', fontWeight: 700,
+      }}>New crate</span>
+    </button>
   );
 }
 

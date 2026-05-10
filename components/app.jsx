@@ -936,7 +936,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               density={tweaks.density} showOverlays={tweaks.showOverlays}
               sortBy={sortBy}
               search={search}
-              viewStyle={viewStyle}
+              viewStyle={viewStyle} setViewStyle={setViewStyle}
               advFilters={advFilters} set={set}
               onBrowseCollection={() => setView('collection')} />
           )}
