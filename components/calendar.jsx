@@ -117,17 +117,23 @@ function CalendarSection({ title, gigs, savedSets, onEdit, onDelete }) {
 function GigRow({ gig, savedSets, onEdit, onDelete }) {
   const linkedSet = gig.setId ? savedSets.find(s => s.id === gig.setId) : null;
   const dateLabel = gig.playedAt ? formatGigDate(gig.playedAt) : 'No date';
+  const today = new Date().toISOString().slice(0, 10);
+  const isPast = gig.playedAt && gig.playedAt < today;
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', gap: 14,
       padding: '14px 16px', borderRadius: 10,
       background: 'var(--panel)', border: '1px solid var(--border)',
+      // Slight dim on the whole row when it's past — supports the muted pill.
+      opacity: isPast ? 0.78 : 1,
     }}>
       <div style={{ flexShrink: 0 }}>
         <span style={{
           display: 'inline-block',
           padding: '5px 10px', borderRadius: 999,
-          background: 'var(--accent)', color: 'var(--on-accent)',
+          background: isPast ? 'var(--hover)' : 'var(--accent)',
+          color: isPast ? 'var(--dim)' : 'var(--on-accent)',
+          border: isPast ? '1px solid var(--border)' : 'none',
           fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
           fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
           whiteSpace: 'nowrap',
@@ -202,12 +208,10 @@ function GigForm({ gig, savedSets, onSave, onClose }) {
 
   const submit = (e) => {
     e.preventDefault();
-    // Recompute status from playedAt at save time so users don't have to
-    // think about it. They can still flip it manually via the toggle below.
+    // Status always derives from the date — no manual override. Future or
+    // unset date = upcoming; past = played.
     const today = new Date().toISOString().slice(0, 10);
-    const status = draft.status === 'played' || draft.status === 'upcoming'
-      ? draft.status
-      : (draft.playedAt && draft.playedAt < today ? 'played' : 'upcoming');
+    const status = draft.playedAt && draft.playedAt < today ? 'played' : 'upcoming';
     onSave({ ...draft, status });
   };
 
@@ -274,26 +278,9 @@ function GigForm({ gig, savedSets, onSave, onClose }) {
             style={{ ...fieldStyle, resize: 'vertical', fontFamily: 'inherit' }} />
         </FieldRow>
 
-        <FieldRow label="Status">
-          <div style={{ display: 'flex', gap: 6 }}>
-            {[
-              { id: 'upcoming', label: 'Upcoming' },
-              { id: 'played',   label: 'Played' },
-            ].map(s => (
-              <button type="button" key={s.id}
-                onClick={() => update({ status: s.id })}
-                style={{
-                  flex: 1, padding: '8px 10px', borderRadius: 6,
-                  background: draft.status === s.id ? 'var(--accent)' : 'transparent',
-                  color: draft.status === s.id ? 'var(--on-accent)' : 'var(--fg)',
-                  border: '1px solid ' + (draft.status === s.id ? 'var(--accent)' : 'var(--border)'),
-                  fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
-                  letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
-                }}>{s.label}</button>
-            ))}
-          </div>
-        </FieldRow>
-
+        {/* Status auto-derives from the date — no manual toggle. Past dates
+            land in the "Past" section with a muted date pill so visitors
+            can tell what's history vs. what's coming. */}
         <label style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
           padding: 12, marginTop: 8, marginBottom: 18,

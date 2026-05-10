@@ -571,6 +571,8 @@ function ProfileGigSection({ title, gigs, isOwner }) {
 }
 
 function ProfileGigRow({ gig, isOwner }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const isPast = gig.playedAt && gig.playedAt < today;
   return (
     <div style={{
       display: 'flex', gap: 14, alignItems: 'flex-start',
@@ -584,7 +586,9 @@ function ProfileGigRow({ gig, isOwner }) {
         <span style={{
           display: 'inline-block',
           padding: '5px 10px', borderRadius: 999,
-          background: 'var(--accent)', color: 'var(--on-accent)',
+          background: isPast ? 'var(--hover)' : 'var(--accent)',
+          color: isPast ? 'var(--dim)' : 'var(--on-accent)',
+          border: isPast ? '1px solid var(--border)' : 'none',
           fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
           fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase',
           whiteSpace: 'nowrap',

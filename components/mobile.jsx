@@ -1351,20 +1351,26 @@ function MobileCalendarSection({ title, gigs, savedSets, onEdit, onDelete,
 function MobileGigRow({ gig, savedSets, onEdit, onDelete, accent, fg, soft, border }) {
   const linkedSet = gig.setId ? savedSets.find(s => s.id === gig.setId) : null;
   const dateLabel = gig.playedAt ? formatMobileGigDate(gig.playedAt) : '—';
+  const today = new Date().toISOString().slice(0, 10);
+  const isPast = gig.playedAt && gig.playedAt < today;
   return (
     <button onClick={onEdit} style={{
       width: '100%', display: 'flex', gap: 10, padding: 12,
       borderRadius: 10, background: soft, border: `1px solid ${border}`,
       color: fg, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+      opacity: isPast ? 0.78 : 1,
     }}>
       <div style={{ flexShrink: 0, alignSelf: 'flex-start' }}>
         <span style={{
           display: 'inline-block',
           padding: '4px 8px', borderRadius: 999,
-          background: accent, color: '#0E0C0A',
+          background: isPast ? 'transparent' : accent,
+          color: isPast ? fg : '#0E0C0A',
+          border: isPast ? `1px solid ${border}` : 'none',
           fontFamily: 'JetBrains Mono, monospace', fontSize: 9,
           fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase',
           whiteSpace: 'nowrap',
+          opacity: isPast ? 0.7 : 1,
         }}>{dateLabel}</span>
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
