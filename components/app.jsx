@@ -295,6 +295,29 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     }
   };
 
+  // Album-level star rating (1–5). Stored as record.rating; used in the
+  // detail header replacing the old per-track stars.
+  const rateRecord = (recordId, rating) => {
+    setRecords(cur => cur.map(r => r.id === recordId ? { ...r, rating } : r));
+    if (selected && selected.id === recordId) {
+      setSelected(s => ({ ...s, rating }));
+    }
+  };
+
+  // Per-track energy rank (1–5). Replaces the old per-track stars: 1–2 chill,
+  // 3 mid, 4–5 peak. Color-coded in the row.
+  const setTrackEnergy = (recordId, trackIndex, energy) => {
+    setRecords(cur => cur.map(r => {
+      if (r.id !== recordId) return r;
+      const tracks = r.tracks.map((t, i) => i === trackIndex ? { ...t, energy } : t);
+      return { ...r, tracks };
+    }));
+    if (selected && selected.id === recordId) {
+      setSelected(s => ({ ...s, tracks: s.tracks.map((t, i) =>
+        i === trackIndex ? { ...t, energy } : t) }));
+    }
+  };
+
   const deleteRecord = (id) => {
     setRecords(cur => cur.filter(r => r.id !== id));
     setSet(s => s.filter(tid => !tid.startsWith(`${id}-`)));
@@ -943,6 +966,8 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               onToggleTrackInSavedSet={toggleTrackInSavedSet}
               onCreateSetWithTrack={createSetWithTrack}
               onRateTrack={rateTrack}
+              onRateRecord={rateRecord}
+              onSetTrackEnergy={setTrackEnergy}
               onRefreshTrackBpm={refreshTrackBpm}
               onRefreshDiscogs={refreshDiscogsRecord}
               onRefreshAlbumBpms={refreshAlbumBpms} />

@@ -1,6 +1,6 @@
 // Record detail drawer — track-level add to set
 
-function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, savedSets, onToggleTrackInSavedSet, onCreateSetWithTrack, onRateTrack, onRefreshTrackBpm, onRefreshDiscogs, onRefreshAlbumBpms }) {
+function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTrack, isTrackInSet, onAddAllTracks, allRecords, onEdit, crates, onAddToCrate, onRemoveFromCrate, onNewCrate, savedSets, onToggleTrackInSavedSet, onCreateSetWithTrack, onRateTrack, onRateRecord, onSetTrackEnergy, onRefreshTrackBpm, onRefreshDiscogs, onRefreshAlbumBpms }) {
   const [playing, setPlaying] = React.useState(null);
   const [progress, setProgress] = React.useState({});
   const [audioMap, setAudioMap] = React.useState({}); // trackId -> object URL
@@ -191,6 +191,13 @@ function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTra
         }}>{record.title}</h2>
         <div style={{ fontSize: 18, color: 'var(--dim)', marginTop: 6 }}>{record.artist}</div>
 
+        {onRateRecord && (
+          <div style={{ marginTop: 10 }}>
+            <TrackRating value={record.rating || 0}
+              onChange={(n) => onRateRecord(record.id, n)} size={18} />
+          </div>
+        )}
+
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0,
           marginTop: 22, padding: '16px 0',
@@ -297,9 +304,9 @@ function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTra
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Waveform seed={i * 37 + record.cover.hue} height={16} width={200}
                       progress={isPlaying ? p : 0} color="var(--dim)" />
-                    {onRateTrack && (
-                      <TrackRating value={t.rating || 0}
-                        onChange={(n) => onRateTrack(record.id, i, n)} />
+                    {onSetTrackEnergy && (
+                      <EnergyMeter value={t.energy || 0}
+                        onChange={(n) => onSetTrackEnergy(record.id, i, n)} />
                     )}
                   </div>
                 </div>
@@ -872,4 +879,35 @@ function NavArrowBtn({ onClick, disabled, title, direction }) {
   );
 }
 
-Object.assign(window, { RecordDetail, TrackAddMenu });
+// Per-track energy rank (1–5). Visualized as 5 stacked bars with a
+// traffic-light color: 1–2 chill (green), 3 mid (amber), 4–5 peak (red).
+// Click any bar to set the energy; click the active bar to clear back to 0.
+function EnergyMeter({ value, onChange, size = 12 }) {
+  const v = Math.max(0, Math.min(5, value | 0));
+  const colorFor = (n) => n <= 2 ? '#54C964'  // green (chill)
+    : n === 3 ? '#F2C744'                       // amber (mid)
+    : '#E74C5C';                                // red (peak)
+  return (
+    <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}
+      title={v ? `Energy ${v}/5` : 'Set energy'}>
+      {[1, 2, 3, 4, 5].map(n => {
+        const active = n <= v;
+        const h = 4 + (n - 1) * 2; // step taller for higher bars
+        return (
+          <button key={n}
+            onClick={(e) => { e.stopPropagation(); onChange(v === n ? 0 : n); }}
+            title={`Energy ${n}`}
+            style={{
+              width: size, height: h,
+              padding: 0, border: 'none', borderRadius: 1,
+              background: active ? colorFor(v) : 'var(--border)',
+              cursor: 'pointer',
+              transition: 'background 0.12s',
+            }} />
+        );
+      })}
+    </div>
+  );
+}
+
+Object.assign(window, { RecordDetail, TrackAddMenu, EnergyMeter });
