@@ -325,24 +325,30 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
   React.useEffect(() => { stop(); }, [current && current.tid, stop]);
   React.useEffect(() => () => stop(), [stop]);
 
-  // ── Mix suggestions: best BPM/key matches FROM RECORDS NOT IN THE SET
-  // so the DJ can dig fresh tracks live and add them to the set on the
-  // fly via the + button. Falls back to in-set picks when no records
-  // collection is passed (preserves the older behavior for safety).
-  // Above the early return so hook order stays stable.
+  // ── Mix suggestions: tracks from RECORDS YOU BROUGHT (the unique
+  // records referenced by the playing set/queue), minus tracks already
+  // in the set and the now-playing one. DJ workflow — you can only spin
+  // what's physically with you at the booth. Hooks must stay above the
+  // early-return guard so order is stable.
   const curBpm = current && current.track ? current.track.bpm : null;
   const curKey = current && current.track ? current.track.key : null;
-  const fromCollection = records && records.length > 0;
+  const hasRecords = records && records.length > 0 && queue && queue.length > 0;
   const suggestions = React.useMemo(() => {
     if (!current || curBpm == null) return [];
     const cd = window.camelotDistance || (() => 3);
     let pool = [];
-    if (fromCollection) {
-      const setIdSet = new Set(setTrackIds || []);
+    if (hasRecords) {
+      const recordsWithYou = new Set();
+      const setTids = new Set();
+      for (const q of queue) {
+        if (q.record) recordsWithYou.add(q.record.id);
+        if (q.tid) setTids.add(q.tid);
+      }
       for (const rec of records) {
+        if (!recordsWithYou.has(rec.id)) continue;
         for (let i = 0; i < (rec.tracks || []).length; i++) {
           const tid = `${rec.id}-${i}`;
-          if (setIdSet.has(tid)) continue;
+          if (setTids.has(tid)) continue;
           const t = rec.tracks[i];
           if (t.bpm == null) continue;
           pool.push({ tid, record: rec, track: t });
@@ -360,7 +366,8 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
     });
     scored.sort((a, b) => a.score - b.score);
     return scored.slice(0, 3);
-  }, [current, queue, position, curBpm, curKey, records, setTrackIds, fromCollection]);
+  }, [current, queue, position, curBpm, curKey, records, hasRecords]);
+  const fromCollection = hasRecords;
 
   // Next 3 tracks in queue order (wraps around).
   const upNext = React.useMemo(() => {
@@ -543,7 +550,7 @@ function MobileNow({ current, nextUp, queueLen, position, queue, onJumpTo, onNex
           }}>
             <span>Mix suggestions</span>
             <span style={{ opacity: 0.7 }}>
-              · {fromCollection ? 'from your collection' : 'from this set'}
+              · {fromCollection ? 'from records you brought' : 'from this set'}
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 16 }}>

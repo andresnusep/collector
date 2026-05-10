@@ -351,25 +351,32 @@ function GigMode({ resolved, records = [], setTrackIds = [], onAddTrack,
   const next = () => setIndex(i => Math.min(resolved.length - 1, i + 1));
   const prev = () => setIndex(i => Math.max(0, i - 1));
 
-  // Mix suggestions: best BPM/key matches FROM RECORDS NOT IN THE SET so the
-  // DJ can pull fresh tracks during the gig. Score = bpmDiff * 2 +
-  // keyPenalty (same weighting as the mobile gig view). Falls back to the
-  // legacy "from this set" mode when no records collection was passed.
+  // Mix suggestions: tracks from the RECORDS THAT ARE WITH THE DJ — every
+  // unique record referenced by the playing set — minus the tracks already
+  // in the set, minus the now-playing track. DJ logic: you can only spin
+  // what you brought to the booth. Score = bpmDiff * 2 + keyPenalty.
+  // Falls back to the legacy in-set pool when no records collection was
+  // passed (preserves old callers).
   const suggestions = React.useMemo(() => {
     const cur = resolved[index];
     if (!cur || cur.track.bpm == null) return [];
     const cd = window.camelotDistance || (() => 3);
-    const setIdSet = new Set(setTrackIds || []);
 
-    // Pool: every track on every record, minus tracks already in this set
-    // and the current track itself. If records isn't provided, fall back to
-    // the in-set pool so old callers still get something.
+    // Records-with-you = unique records referenced by the playing set.
+    const recordsWithYou = new Set();
+    const setTids = new Set();
+    for (const r of resolved) {
+      if (r.record) recordsWithYou.add(r.record.id);
+      if (r.tid) setTids.add(r.tid);
+    }
+
     let pool = [];
-    if (records && records.length > 0) {
+    if (records && records.length > 0 && recordsWithYou.size > 0) {
       for (const rec of records) {
+        if (!recordsWithYou.has(rec.id)) continue;
         for (let i = 0; i < (rec.tracks || []).length; i++) {
           const tid = `${rec.id}-${i}`;
-          if (setIdSet.has(tid)) continue;
+          if (setTids.has(tid)) continue;
           const t = rec.tracks[i];
           if (t.bpm == null) continue;
           pool.push({ tid, record: rec, track: t });
@@ -388,9 +395,9 @@ function GigMode({ resolved, records = [], setTrackIds = [], onAddTrack,
     });
     scored.sort((a, b) => a.score - b.score);
     return scored.slice(0, 4);
-  }, [resolved, index, records, setTrackIds]);
+  }, [resolved, index, records]);
 
-  const fromCollection = !!(records && records.length > 0);
+  const fromCollection = !!(records && records.length > 0 && resolved.length > 0);
 
   if (resolved.length === 0) return null;
   const cur = resolved[index];
@@ -542,7 +549,7 @@ function GigMode({ resolved, records = [], setTrackIds = [], onAddTrack,
                   }}>
                     <span>Mix suggestions</span>
                     <span style={{ color: 'var(--fg)', opacity: 0.55, fontSize: 9 }}>
-                      · {fromCollection ? 'from your collection' : 'from this set'}
+                      · {fromCollection ? 'from records you brought' : 'from this set'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 22 }}>
