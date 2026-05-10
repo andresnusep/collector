@@ -695,8 +695,14 @@ function TransitionHint({ fromBpm, toBpm, fromKey, toKey, accentColor }) {
 // SavedSetPage detail view. Replaces the old sidebar-inline saved-sets
 // list which grew unbounded as the collection grew.
 function SavedSetsHub({ savedSets, activeSetId, onOpen, onDelete,
-                        onTogglePublic, onNewSet }) {
+                        onTogglePublic, onCreateEmpty, onNewSet }) {
   const total = savedSets.length;
+  const [creating, setCreating] = React.useState(false);
+  const [name, setName] = React.useState('');
+  const submitCreate = () => {
+    onCreateEmpty && onCreateEmpty(name);
+    setName(''); setCreating(false);
+  };
   return (
     <div style={{ padding: '4px 0 40px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between',
@@ -711,13 +717,53 @@ function SavedSetsHub({ savedSets, activeSetId, onOpen, onDelete,
             them on your DJ profile.
           </div>
         </div>
-        <button onClick={onNewSet} style={{
-          padding: '10px 16px', borderRadius: 8, border: 'none',
-          background: 'var(--accent)', color: 'var(--on-accent)',
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
-          letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 6,
-        }}>{Icon.Plus} New set in builder</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {creating && onCreateEmpty ? (
+            <div style={{
+              display: 'flex', gap: 6, alignItems: 'center',
+              padding: 4, borderRadius: 8,
+              border: '1px solid var(--accent)', background: 'var(--hover)',
+            }}>
+              <input autoFocus value={name}
+                onChange={e => setName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') submitCreate();
+                  if (e.key === 'Escape') { setName(''); setCreating(false); }
+                }}
+                placeholder="Set name…"
+                style={{
+                  padding: '6px 10px', borderRadius: 6,
+                  background: 'transparent', border: 'none', outline: 'none',
+                  color: 'var(--fg)', fontSize: 13, fontFamily: 'inherit',
+                  minWidth: 180,
+                }} />
+              <button onClick={submitCreate} style={{
+                padding: '6px 12px', borderRadius: 6, border: 'none',
+                background: 'var(--accent)', color: 'var(--on-accent)',
+                fontFamily: 'JetBrains Mono, monospace', fontSize: 10, fontWeight: 700,
+                letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+              }}>Create</button>
+            </div>
+          ) : onCreateEmpty && (
+            <button onClick={() => setCreating(true)} style={{
+              padding: '10px 16px', borderRadius: 8, border: 'none',
+              background: 'var(--accent)', color: 'var(--on-accent)',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
+              letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>{Icon.Plus} New set</button>
+          )}
+          {!creating && onNewSet && (
+            <button onClick={onNewSet} style={{
+              padding: '10px 16px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'transparent',
+              color: 'var(--fg)',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 700,
+              letterSpacing: 1, textTransform: 'uppercase', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>{Icon.Deck} Set Builder</button>
+          )}
+        </div>
       </div>
 
       {total === 0 ? (

@@ -160,6 +160,18 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     return id;
   };
 
+  // Create an empty saved set straight from the Sets hub. User fills it
+  // later via per-album "Add to Set" menus. Set Builder remains for the
+  // live drag-and-drop composition workflow.
+  const createEmptySet = (name) => {
+    const finalName = (name || '').trim() || `Set ${new Date().toLocaleDateString()}`;
+    const id = `s${Date.now()}`;
+    setSavedSets(ss => [...ss, {
+      id, name: finalName, trackIds: [], createdAt: Date.now(),
+    }]);
+    return id;
+  };
+
   // Gig CRUD — operate on the new top-level gigs state. Phase 1's migration
   // already lifted nested saved_sets.gigs[] into here; from now on this is
   // the source of truth for the calendar.
@@ -952,6 +964,10 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               onOpen={openSavedSet}
               onDelete={deleteSavedSet}
               onTogglePublic={toggleSavedSetPublic}
+              onCreateEmpty={(name) => {
+                const id = createEmptySet(name);
+                if (id) openSavedSet(id);
+              }}
               onNewSet={() => setView('set')} />
           )}
           {view === 'sets' && viewingSetId && (
