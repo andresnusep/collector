@@ -632,10 +632,14 @@ function SavedSetsList({ savedSets, currentSet, activeSetId, viewingSetId, onSav
 // ─────────── Crates page (top-level view) ───────────
 
 function CratesPage({ crates, records, activeCrateId, setActiveCrateId, onSelect,
-                     onDeleteCrate, onRemoveFromCrate, onNewCrate,
+                     onDeleteCrate, onRenameCrate, onRemoveFromCrate, onNewCrate,
                      onAddToSet, inSet, density, showOverlays,
                      sortBy, search, viewStyle, setViewStyle, advFilters, set,
                      onBrowseCollection }) {
+  const [renaming, setRenaming] = React.useState(false);
+  const [draftName, setDraftName] = React.useState('');
+  // Reset rename UI when we switch crates (or close the inside view).
+  React.useEffect(() => { setRenaming(false); setDraftName(''); }, [activeCrateId]);
   const activeCrate = crates.find(c => c.id === activeCrateId);
 
   if (activeCrate) {
@@ -670,14 +674,53 @@ function CratesPage({ crates, records, activeCrateId, setActiveCrateId, onSelect
             fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
             letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700,
           }}>← All crates</button>
-          <h2 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>
-            {activeCrate.name}
-          </h2>
+          {renaming ? (
+            <input autoFocus value={draftName}
+              onChange={e => setDraftName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  onRenameCrate && onRenameCrate(activeCrate.id, draftName);
+                  setRenaming(false);
+                }
+                if (e.key === 'Escape') { setRenaming(false); setDraftName(''); }
+              }}
+              onBlur={() => {
+                if (draftName.trim() && draftName.trim() !== activeCrate.name) {
+                  onRenameCrate && onRenameCrate(activeCrate.id, draftName);
+                }
+                setRenaming(false);
+              }}
+              style={{
+                fontSize: 26, fontWeight: 700, letterSpacing: -0.5,
+                padding: '2px 8px', borderRadius: 6,
+                background: 'var(--hover)', border: '1px solid var(--accent)',
+                color: 'var(--fg)', fontFamily: 'inherit', outline: 'none',
+                minWidth: 220,
+              }} />
+          ) : (
+            <h2 style={{ margin: 0, fontSize: 26, fontWeight: 700, letterSpacing: -0.5 }}>
+              {activeCrate.name}
+            </h2>
+          )}
           <span style={{
             fontFamily: 'JetBrains Mono, monospace', fontSize: 11, color: 'var(--dim)',
             letterSpacing: 0.5, textTransform: 'uppercase',
           }}>{crateRecords.length} records</span>
           <div style={{ flex: 1 }} />
+          {onRenameCrate && (
+            <button onClick={() => {
+              setDraftName(activeCrate.name);
+              setRenaming(r => !r);
+            }} style={{
+              padding: '6px 12px', borderRadius: 6,
+              background: renaming ? 'var(--accent)' : 'transparent',
+              color: renaming ? 'var(--on-accent)' : 'var(--fg)',
+              border: '1px solid ' + (renaming ? 'var(--accent)' : 'var(--border)'),
+              cursor: 'pointer',
+              fontFamily: 'JetBrains Mono, monospace', fontSize: 10,
+              letterSpacing: 1, textTransform: 'uppercase', fontWeight: 700,
+            }}>{renaming ? 'Done' : 'Edit'}</button>
+          )}
           <button onClick={() => {
             if (confirm(`Delete crate "${activeCrate.name}"?`)) onDeleteCrate(activeCrate.id);
           }} style={{

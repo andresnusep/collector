@@ -176,6 +176,11 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
     setCrates(cs => cs.filter(c => c.id !== id));
     if (activeCrateId === id) setActiveCrateId(null);
   };
+  const renameCrate = (id, name) => {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return;
+    setCrates(cs => cs.map(c => c.id === id ? { ...c, name: trimmed } : c));
+  };
   const addToCrate = (crateId, recordId) => {
     setCrates(cs => cs.map(c => c.id === crateId
       ? { ...c, recordIds: c.recordIds.includes(recordId) ? c.recordIds : [...c.recordIds, recordId] }
@@ -931,6 +936,7 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
               activeCrateId={activeCrateId} setActiveCrateId={setActiveCrateId}
               onSelect={setSelected}
               onDeleteCrate={deleteCrate}
+              onRenameCrate={renameCrate}
               onRemoveFromCrate={removeFromCrate}
               onNewCrate={newCrate}
               onAddToSet={toggleAllTracks} inSet={recordInSet}
