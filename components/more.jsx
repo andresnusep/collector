@@ -252,7 +252,7 @@ function Dashboard({ records, set, savedSets = [], gigs = [] }) {
           </div>
           <div>
             <div style={{ fontSize: 32, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
-              color: 'var(--accent)' }}>
+              color: '#F5B400' }}>
               {avgRating || '—'}<span style={{ fontSize: 16, color: 'var(--dim)' }}> / 5</span>
             </div>
             <div style={{ fontSize: 11, color: 'var(--dim)',
