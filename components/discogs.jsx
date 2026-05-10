@@ -315,6 +315,7 @@ function mapDiscogsRelease(rel) {
     id: `d${releaseId}`,
     source: 'discogs',
     discogsId: releaseId,
+    addedAt: Date.now(),
     artist: artistNames,
     title: info.title || 'Untitled',
     year: info.year || null,

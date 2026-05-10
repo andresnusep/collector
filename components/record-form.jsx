@@ -40,6 +40,9 @@ function RecordFormModal({ open, initial, onClose, onSave, onDelete }) {
     if (!draft.artist.trim() || !draft.title.trim()) return;
     const clean = {
       ...draft,
+      // Preserve the original addedAt when editing; stamp a fresh one on
+      // brand-new records so they bubble to the top of "Recently added".
+      addedAt: draft.addedAt || Date.now(),
       bpm: draft.bpm === '' || draft.bpm == null ? null : Number(draft.bpm),
       year: draft.year ? Number(draft.year) : null,
       value: Number(draft.value) || 0,

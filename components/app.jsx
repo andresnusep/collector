@@ -1249,7 +1249,24 @@ function ApiStatus({ label, ok }) {
 
 // ─── Sort helper — shared by collection + crates ──────────────────────
 function sortRecords(records, sortBy) {
-  if (!sortBy || sortBy === 'recent') return records;
+  if (!sortBy || sortBy === 'recent') {
+    // Newest at the top. Two cases handled in one pass:
+    //   • Records with addedAt sort by timestamp desc and rank above
+    //     legacy records (no timestamp) so a freshly-added entry always
+    //     lands at the very top.
+    //   • Legacy records without addedAt fall back to reverse-insertion-
+    //     order so the most-recently-imported one still floats up.
+    const indexed = records.map((r, i) => [r, i]);
+    indexed.sort((a, b) => {
+      const ta = a[0].addedAt || 0;
+      const tb = b[0].addedAt || 0;
+      if (ta && tb) return tb - ta;
+      if (ta && !tb) return -1;
+      if (tb && !ta) return 1;
+      return b[1] - a[1]; // reverse insertion order
+    });
+    return indexed.map(p => p[0]);
+  }
   const clone = [...records];
   const cmpStr = (a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' });
   const avgBpm = (r) => {
