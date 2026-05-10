@@ -715,18 +715,13 @@ function CratesPage({ crates, records, activeCrateId, setActiveCrateId, onSelect
           </div>
         ) : (
           <>
-            {(!viewStyle || viewStyle === 'grid') && (
-              <CollectionGrid records={crateRecords} onSelect={onSelect}
-                onAddToSet={onAddToSet} inSet={inSet} density={density}
-                showOverlays={showOverlays} />
-            )}
-            {viewStyle === 'list' && (
+            {viewStyle === 'list' ? (
               <CollectionList records={crateRecords} onSelect={onSelect}
                 onAddToSet={onAddToSet} inSet={inSet} density={density}
                 showOverlays={showOverlays} />
-            )}
-            {viewStyle === 'stack' && (
-              <CollectionStack records={crateRecords} onSelect={onSelect}
+            ) : (
+              /* grid + legacy 'stack' both fall through to the grid. */
+              <CollectionGrid records={crateRecords} onSelect={onSelect}
                 onAddToSet={onAddToSet} inSet={inSet} density={density}
                 showOverlays={showOverlays} />
             )}

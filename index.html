@@ -472,7 +472,7 @@ function Root() {
           <div className="tweaks-row">
             <span className="tweaks-label">Collection view</span>
             <div className="tweaks-seg">
-              {['grid', 'list', 'stack'].map(v => (
+              {['grid', 'list'].map(v => (
                 <button key={v} className={tweaks.viewStyle === v ? 'active' : ''}
                   onClick={() => updateTweak({ viewStyle: v })}>{v}</button>
               ))}

@@ -876,15 +876,16 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
                 onOpenImport={() => setImportOpen(true)} />
             ) : (
               <>
-                {viewStyle === 'grid' && <CollectionGrid records={sortedFiltered} onSelect={setSelected}
-                  onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
-                  showOverlays={tweaks.showOverlays} />}
-                {viewStyle === 'list' && <CollectionList records={sortedFiltered} onSelect={setSelected}
-                  onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
-                  showOverlays={tweaks.showOverlays} />}
-                {viewStyle === 'stack' && <CollectionStack records={sortedFiltered} onSelect={setSelected}
-                  onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
-                  showOverlays={tweaks.showOverlays} />}
+                {viewStyle === 'list' ? (
+                  <CollectionList records={sortedFiltered} onSelect={setSelected}
+                    onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
+                    showOverlays={tweaks.showOverlays} />
+                ) : (
+                  /* grid + legacy 'stack' both render as the grid now. */
+                  <CollectionGrid records={sortedFiltered} onSelect={setSelected}
+                    onAddToSet={toggleAllTracks} inSet={recordInSet} density={tweaks.density}
+                    showOverlays={tweaks.showOverlays} />
+                )}
               </>
             )
           )}
@@ -1377,12 +1378,12 @@ function TopBar({ view, search, setSearch, viewStyle, setViewStyle, genreFilter,
             {/* Sort */}
             <SortDropdown sortBy={sortBy} setSortBy={setSortBy} />
 
-            {/* View style */}
+            {/* View style — stack-by-genre dropped; Crates covers manual
+                grouping better and the genre auto-grouping was rarely used. */}
             <div style={{ display: 'flex', gap: 4, border: '1px solid var(--border)', borderRadius: 6, padding: 3 }}>
               {[
                 { id: 'grid', icon: Icon.Grid },
                 { id: 'list', icon: Icon.List },
-                { id: 'stack', icon: Icon.Stack },
               ].map(v => (
                 <button key={v.id} onClick={() => setViewStyle(v.id)} style={{
                   width: 28, height: 24, border: 'none', borderRadius: 4,
