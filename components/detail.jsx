@@ -879,30 +879,32 @@ function NavArrowBtn({ onClick, disabled, title, direction }) {
   );
 }
 
-// Per-track energy rank (1–5). Visualized as 5 stacked bars with a
-// traffic-light color: 1–2 chill (green), 3 mid (amber), 4–5 peak (red).
-// Click any bar to set the energy; click the active bar to clear back to 0.
-function EnergyMeter({ value, onChange, size = 12 }) {
-  const v = Math.max(0, Math.min(5, value | 0));
+// Per-track energy rank (1–5). Five same-size circles with a traffic-light
+// color tied to the current rank: 1–2 chill (green), 3 mid (amber),
+// 4–5 peak (red). Click a circle to set; click the active one to clear.
+// Treats any value outside 1–5 as "not set" so legacy data from the older
+// 1–10 energy scale shows up as an empty meter instead of a wrong reading.
+function EnergyMeter({ value, onChange, size = 10 }) {
+  const v = (value >= 1 && value <= 5) ? Math.round(value) : 0;
   const colorFor = (n) => n <= 2 ? '#54C964'  // green (chill)
     : n === 3 ? '#F2C744'                       // amber (mid)
     : '#E74C5C';                                // red (peak)
   return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}
+    <div style={{ display: 'flex', gap: 3, alignItems: 'center' }}
       title={v ? `Energy ${v}/5` : 'Set energy'}>
       {[1, 2, 3, 4, 5].map(n => {
         const active = n <= v;
-        const h = 4 + (n - 1) * 2; // step taller for higher bars
         return (
           <button key={n}
             onClick={(e) => { e.stopPropagation(); onChange(v === n ? 0 : n); }}
             title={`Energy ${n}`}
             style={{
-              width: size, height: h,
-              padding: 0, border: 'none', borderRadius: 1,
-              background: active ? colorFor(v) : 'var(--border)',
+              width: size, height: size, borderRadius: '50%',
+              padding: 0,
+              background: active ? colorFor(v) : 'transparent',
+              border: active ? 'none' : '1px solid var(--border)',
               cursor: 'pointer',
-              transition: 'background 0.12s',
+              transition: 'background 0.12s, border-color 0.12s',
             }} />
         );
       })}
