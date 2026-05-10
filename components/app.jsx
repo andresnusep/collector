@@ -1094,7 +1094,10 @@ function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord,
     }}>
       {/* Wordmark — the brand-logo class flips luminance in dark/warm themes
           while keeping STUDIO yellow (see index.html). <picture> serves WebP
-          where supported (60% smaller) and falls back to PNG elsewhere. */}
+          where supported (60% smaller) and falls back to PNG elsewhere.
+          The "For vinyl DJs · v1.0 BETA" tagline used to live under this
+          logo; user moved it down to the attribution footer so it doesn't
+          compete with the brand mark. */}
       <div style={{ marginBottom: 18 }}>
         <picture>
           <source srcSet="kollectorlogo.webp" type="image/webp" />
@@ -1102,10 +1105,6 @@ function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord,
             className="brand-logo"
             style={{ maxWidth: 120, width: '70%', height: 'auto', display: 'block' }} />
         </picture>
-        <div style={{
-          fontFamily: 'JetBrains Mono, monospace', fontSize: 9, letterSpacing: 1.5,
-          textTransform: 'uppercase', color: 'var(--dim)', marginTop: 8,
-        }}>For vinyl DJs · v1.0 BETA</div>
       </div>
       {/* end wordmark */}
 
@@ -1227,6 +1226,11 @@ function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord,
         <a href="https://getsongbpm.com" target="_blank" rel="noreferrer"
           style={{ color: 'var(--accent)', textDecoration: 'none' }}>GetSongBPM</a>
         {' '}· previews via iTunes
+        <div style={{
+          marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)',
+          letterSpacing: 1.5, textTransform: 'uppercase', color: 'var(--dim)',
+          opacity: 0.7,
+        }}>For vinyl DJs · v1.0 BETA</div>
       </div>
     </aside>
   );

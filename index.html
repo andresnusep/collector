@@ -240,13 +240,16 @@
      their site before activating the API key. Because the in-app attribution
      is rendered by React, it's invisible to non-JS verifier crawlers. This
      bottom-right pinned footer keeps the link in initial HTML source. -->
-<footer data-cs-attribution style="position:fixed;bottom:6px;right:10px;
-    font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.4px;
-    color:#6b6763;background:transparent;z-index:1">
+<!-- GetSongBPM's verifier reads the raw HTML for the backlink, so we keep
+     the footer in the source but render it off-screen so it doesn't
+     duplicate the same attribution that the sidebar already shows. The
+     anchors are still parseable by crawlers. -->
+<footer data-cs-attribution style="position:fixed;left:-9999px;top:-9999px;
+    width:1px;height:1px;overflow:hidden;pointer-events:none;z-index:-1">
   BPM &amp; key via
-  <a href="https://acousticbrainz.org" rel="noopener" style="color:#A88B5C;text-decoration:none">AcousticBrainz</a>
+  <a href="https://acousticbrainz.org" rel="noopener">AcousticBrainz</a>
   &amp;
-  <a href="https://getsongbpm.com" rel="noopener" style="color:#A88B5C;text-decoration:none">GetSongBPM</a>
+  <a href="https://getsongbpm.com" rel="noopener">GetSongBPM</a>
 </footer>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
