@@ -985,12 +985,24 @@ function CollectorStudio({ tweaks, setTweaks, user, onSignOut }) {
         </div>
 
         {selected && (() => {
-          // Walk the currently-visible (filtered + sorted) list so prev/next
-          // mirror what the user sees in the grid. Falls back to records if
-          // the selected record isn't in the visible list (e.g. opened
-          // straight from a search hit that the current filter excludes).
-          const visible = sortedFiltered.some(r => r.id === selected.id)
-            ? sortedFiltered : records;
+          // Walk the currently-visible list so prev/next mirror what the user
+          // sees in the grid:
+          //   • Inside a crate → walk that crate's records only.
+          //   • In the collection view → walk the filtered + sorted list.
+          //   • Anything else (search hit that the filter would exclude, etc.)
+          //     → fall back to the unfiltered records.
+          let visible;
+          if (view === 'crates' && activeCrateId) {
+            const crate = crates.find(c => c.id === activeCrateId);
+            const crateRecs = crate
+              ? crate.recordIds.map(id => records.find(r => r.id === id)).filter(Boolean)
+              : [];
+            visible = crateRecs.some(r => r.id === selected.id) ? crateRecs : records;
+          } else if (sortedFiltered.some(r => r.id === selected.id)) {
+            visible = sortedFiltered;
+          } else {
+            visible = records;
+          }
           const idx = visible.findIndex(r => r.id === selected.id);
           const prev = idx > 0 ? visible[idx - 1] : null;
           const next = idx >= 0 && idx < visible.length - 1 ? visible[idx + 1] : null;
