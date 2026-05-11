@@ -7,6 +7,21 @@
 // those on read so the cache stays backward-compatible across upgrades.
 
 const CACHE_KEY = 'cs-itunes-cache';
+// Bump when the matching algorithm changes — old wrong matches (piano
+// covers, tribute-band hits) get flushed on next load instead of
+// lingering in localStorage forever.
+const CACHE_VERSION = 2;
+const CACHE_VERSION_KEY = 'cs-itunes-cache-v';
+
+(function migrateCache() {
+  try {
+    const stored = parseInt(localStorage.getItem(CACHE_VERSION_KEY) || '1', 10);
+    if (stored < CACHE_VERSION) {
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.setItem(CACHE_VERSION_KEY, String(CACHE_VERSION));
+    }
+  } catch {}
+})();
 
 function loadCache() {
   try { return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}'); }
@@ -52,24 +67,47 @@ function similarity(a, b) {
 
 // Words that signal a non-original version. Penalize if the user's title
 // doesn't already contain one of them.
+// Words that signal a non-original version. The list got expanded after
+// users reported piano / electronic / orchestral covers winning over the
+// real track — iTunes is full of "tribute" labels that name-check the
+// original artist and ride the title through search.
 const ALT_VERSION_WORDS = [
   'remix', 'live', 'karaoke', 'tribute', 'cover', 'instrumental',
   'acoustic', 'demo', 'edit', 'rework', 'reprise', 'radio edit',
-  'extended', 'bootleg', 'vip mix', 'dub', 'a cappella',
+  'extended', 'bootleg', 'vip mix', 'dub', 'a cappella', 'acapella',
+  'piano', 'electronic', 'orchestral', 'symphonic', 'symphony',
+  'lo-fi', 'lofi', 'lullaby', 'sleep', 'made famous by',
+  'in the style of', 'as made famous', 'type beat', 'guitar version',
+  'string quartet', 'reggae version', 'salsa version', 'cumbia version',
+  'workout', 'spa', 'meditation', '8 bit', '8-bit', 'chiptune',
+  'nightcore', 'slowed', 'sped up', 'reverb', 'mariachi version',
 ];
 
 function scoreResult(r, wantArtist, wantTitle) {
   if (!r.previewUrl) return -Infinity; // no preview → useless
   const artistSim = similarity(r.artistName || '', wantArtist);
   const titleSim = similarity(r.trackName || '', wantTitle);
+  // Hard artist gate: a tribute/cover act that name-checks the real
+  // artist in the album title can match the search query exactly while
+  // having an entirely different artistName. Without this gate, a
+  // "Doom Tribute Band" version of an MF Doom track sails through on
+  // title alone.
+  if (artistSim < 0.5) return -Infinity;
   // Artist match matters more than title match (wrong artist = wrong song).
   let score = artistSim * 65 + titleSim * 35;
   const foundName = (r.trackName || '').toLowerCase();
+  const foundCollection = (r.collectionName || '').toLowerCase();
   const wantName = String(wantTitle).toLowerCase();
   const wantsAlt = ALT_VERSION_WORDS.some(w => wantName.includes(w));
   if (!wantsAlt) {
+    // Penalize hard when the alt-marker shows up in either the track
+    // title OR the album/collection name — "Piano Tribute to Bad Bunny"
+    // hides the marker in the album, not the song title.
     for (const w of ALT_VERSION_WORDS) {
-      if (foundName.includes(w)) { score -= 18; break; }
+      if (foundName.includes(w) || foundCollection.includes(w)) {
+        score -= 35;
+        break;
+      }
     }
   }
   return score;
@@ -94,7 +132,10 @@ async function fetchPreviewMeta(artist, title) {
       .sort((a, b) => b.s - a.s);
     // Reject if the best match is still weak — better to show no preview
     // than a confidently-wrong one.
-    if (scored[0].s < 35) return { url: null, durationMs: null };
+    // Higher floor than before (was 35). With the new hard artist gate
+    // a low score now means *both* artist and title were shaky, which
+    // is the case where wrong previews used to slip through.
+    if (scored[0].s < 55) return { url: null, durationMs: null };
     const hit = scored[0].r;
     const durationMs = typeof hit.trackTimeMillis === 'number' && hit.trackTimeMillis > 0
       ? hit.trackTimeMillis : null;
