@@ -387,11 +387,22 @@ function RecordDetail({ record, onClose, onPrev, onNext, positionLabel, onAddTra
       {similar.length > 0 && (
         <div style={{ padding: '0 20px 40px' }}>
           <SectionHead>Similar in your collection</SectionHead>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
             {similar.map(r => (
-              <div key={r.id} style={{ cursor: 'pointer' }}>
-                <RecordCover hue={r.cover.hue} shape={r.cover.shape} imageUrl={r.cover.image} title={r.title} artist={r.artist}
-                  size={120} style={{ width: '100%', aspectRatio: '1 / 1', height: 'auto' }} />
+              <div key={r.id} style={{ cursor: 'pointer', minWidth: 0 }}>
+                {/* Square frame forces every cover to the same footprint
+                    regardless of the underlying image aspect ratio. */}
+                <div style={{
+                  width: '100%', aspectRatio: '1 / 1',
+                  borderRadius: 4, overflow: 'hidden',
+                  background: 'var(--panel)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <RecordCover hue={r.cover.hue} shape={r.cover.shape}
+                    imageUrl={r.cover.image} title={r.title} artist={r.artist}
+                    size={120}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
                 <div style={{ fontSize: 11, fontWeight: 600, marginTop: 6,
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
                 <div style={{ fontSize: 10, color: 'var(--dim)',

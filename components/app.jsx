@@ -1090,7 +1090,8 @@ function Sidebar({ view, setView, set, records, gigs, onOpenImport, onAddRecord,
     <aside style={{
       background: 'var(--sidebar-bg)', borderRight: '1px solid var(--border)',
       padding: '20px 16px', display: 'flex', flexDirection: 'column',
-      overflow: 'hidden',
+      overflowY: 'auto', overflowX: 'hidden', height: '100vh',
+      scrollbarWidth: 'thin',
     }}>
       {/* Wordmark — the brand-logo class flips luminance in dark/warm themes
           while keeping STUDIO yellow (see index.html). <picture> serves WebP
