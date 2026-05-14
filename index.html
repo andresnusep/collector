@@ -346,7 +346,62 @@ function useHashRoute() {
   return route;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// MAINTENANCE MODE
+// Flip to `true` to take the app fully offline: nothing mounts the workspace,
+// no auth call fires, no Supabase hydration runs — zero egress. Used while
+// the Supabase egress quota recovers (grace period ends 13 Jun 2026).
+// To bring the app back: set this to `false`, commit, push. That's it.
+// For a hard guarantee you can ALSO pause the project in the Supabase
+// dashboard (Settings → General → Pause) — that blocks any direct API hits
+// too, not just traffic from this front-end.
+// ─────────────────────────────────────────────────────────────────────────
+const MAINTENANCE_MODE = true;
+
+function MaintenanceScreen() {
+  return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', textAlign: 'center',
+      background: 'var(--bg, #0E0C0A)', color: 'var(--fg, #EDE6DA)',
+      fontFamily: 'JetBrains Mono, monospace', padding: '40px 24px', gap: 18,
+    }}>
+      <picture>
+        <source srcSet="kollectorlogo.webp" type="image/webp" />
+        <img src="kollectorlogo.png" alt="Kollector Studio"
+          style={{ maxWidth: 160, width: '60%', height: 'auto' }} />
+      </picture>
+      <div style={{
+        fontSize: 13, letterSpacing: 1.5, textTransform: 'uppercase',
+        color: 'var(--accent, #F5B400)',
+      }}>Back soon</div>
+      <div style={{
+        fontSize: 13, lineHeight: 1.7, maxWidth: 420, color: 'var(--dim, #8A8278)',
+      }}>
+        Kollector Studio is paused for brief maintenance. Your collection,
+        sets and gigs are all safe — nothing has been lost. Check back in a
+        little while.
+      </div>
+      <div style={{
+        marginTop: 8, fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase',
+        color: 'var(--dim, #8A8278)', opacity: 0.6,
+      }}>For vinyl DJs · v1.0 BETA</div>
+    </div>
+  );
+}
+
 function Root() {
+  // Maintenance gate — must come before any hook that could touch Supabase
+  // (useSession). MAINTENANCE_MODE is a module constant, so the hook order
+  // stays identical across every render: Rules of Hooks are satisfied.
+  if (MAINTENANCE_MODE) {
+    return (
+      <div className="app dark">
+        <MaintenanceScreen />
+      </div>
+    );
+  }
+
   const [tweaks, setTweaks] = React.useState(() => {
     const saved = localStorage.getItem('cs-tweaks');
     if (saved) { try { return { ...TWEAK_DEFAULTS, ...JSON.parse(saved) }; } catch {} }
